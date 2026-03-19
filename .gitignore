@@ -1,0 +1,74 @@
+# Vivado project files
+*.xpr
+*.xise
+*.xmsg
+*.jou
+*.log
+*.str
+*.rpt
+*.xml
+
+# Vivado run directories
+/.runs/
+/.cache/
+/.hw/
+/.sim/
+/.ip_user_files/
+/.ipdefs/
+/.sdk/
+/.xsa/
+/.xpe/
+/.Xil/
+
+# Generated IP output
+**/component.xml
+**/vivado*backup*.tcl
+**/tmp*
+**/upgrade_log*
+**/vivado_*_utilization_*.rpt
+**/vivado_*_timing_*.rpt
+
+# Build and implementation artifacts
+/build/
+/*.bit
+/*.bin
+/*.ltx
+/*.dcp
+/*.ncd
+
+# Simulation intermediates
+/work/
+**/modelsim.ini
+**/questa.ini
+**/transcript
+**/vsim.wlf
+
+# Generated HDL or wrappers
+**/bd/*/hdl/*
+**/bd/*/ip/*
+
+# User environment
+*.swp
+*.bak
+*.tmp
+*~
+.vscode/
+.idea/
+.DS_Store
+
+# Local scripts or test artifacts
+/local/
+
+# Script binaries
+src/**/*.o
+src/**/*.d
+src/**/*.elf
+src/**/*.bin
+src/**/*.dump
+
+# Microblaze binaries
+microblaze/**/*.o
+microblaze/**/*.d
+microblaze/**/*.elf
+microblaze/**/*.bin
+microblaze/**/*.dump
