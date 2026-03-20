@@ -9,21 +9,31 @@ use work.decoder_constants.all;
 --
 -- Module that derives stats from a decoded CoreSight stream:
 --   global idle cycles,
---   gap details,
---   burst details,
+--   gap/burst details for packets (32-bits inputs),
+--   gap/burst details for atoms,
 --
 -- Presents an AXI-Lite interface to activate the module and read the stats:
---   0x0: Control (bit 0 = stats enable, bit 1 = reset)
---   0x4: Total cycles [31:0]
---   0x8: Packet count [31:0]
---   0xC: Idle cycles [31:0]
---   0x10: Burst count [31:0]
---   0x14: Max burst [31:0]
---   0x18: Min gap [31:0]
---   0x1C: Max gap [31:0]
---   0x20: Gap events [31:0]
---   0x24: Sum burst [31:0]
---   0x28: Sum gaps [31:0]
+--   0x00: Control (bit 0 = stats enable, bit 1 = reset)
+--   0x04: Total cycles
+--   0x08: Idle cycles
+--   0x0C: Packet count
+--   0x10: Packet burst count
+--   0x14: Min packet burst length
+--   0x18: Max packet burst length
+--   0x1C: Sum packet bursts
+--   0x20: Packet gap count
+--   0x24: Min packet gap length
+--   0x28: Max packet gap length
+--   0x2C: Sum packet gaps
+--   0x30: Atom count
+--   0x34: Atom burst count
+--   0x38: Min atom burst length
+--   0x3C: Max atom burst length
+--   0x40: Sum atom bursts
+--   0x44: Atom gap count
+--   0x48: Min atom gap length
+--   0x4C: Max atom gap length
+--   0x50: Sum atom gaps
 
 entity decoder_stats is
     generic (
@@ -104,6 +114,83 @@ entity decoder_stats is
 end entity;
 
 architecture Behavioral of decoder_stats is
+
+    ------------------
+    -- Procedures
+    ------------------
+
+    procedure process_atom(
+        i_valid           : in  std_logic;
+        has_seen_transfer : in  std_logic;
+        -- vars
+        variable v_prev_atom_valid : inout std_logic;
+        variable v_atom_count      : inout unsigned(COUNTER_W-1 downto 0);
+
+        variable v_atom_burst_length     : inout unsigned(COUNTER_W-1 downto 0);
+        variable v_atom_burst_count      : inout unsigned(COUNTER_W-1 downto 0);
+        variable v_max_atom_burst_length : inout unsigned(COUNTER_W-1 downto 0);
+        variable v_min_atom_burst_length : inout unsigned(COUNTER_W-1 downto 0);
+        variable v_sum_atom_bursts       : inout unsigned(COUNTER_W-1 downto 0);
+
+        variable v_atom_gap_length     : inout unsigned(COUNTER_W-1 downto 0);
+        variable v_atom_gap_count      : inout unsigned(COUNTER_W-1 downto 0);
+        variable v_min_atom_gap_length : inout unsigned(COUNTER_W-1 downto 0);
+        variable v_max_atom_gap_length : inout unsigned(COUNTER_W-1 downto 0);
+        variable v_sum_atom_gaps       : inout unsigned(COUNTER_W-1 downto 0)
+    ) is
+    begin
+        if i_valid = '1' then
+            v_atom_count := v_atom_count + 1;
+
+            -- Continuation of current burst
+            if v_prev_atom_valid = '1' then
+                v_atom_burst_length := v_atom_burst_length + 1;
+            else
+                -- Update gaps info
+                if has_seen_transfer = '1' then
+                    v_atom_gap_count := v_atom_gap_count + 1;
+                    v_sum_atom_gaps  := v_sum_atom_gaps + v_atom_gap_length;
+
+                    if v_atom_gap_length < v_min_atom_gap_length or v_min_atom_gap_length = 0 then
+                        v_min_atom_gap_length := v_atom_gap_length;
+                    end if;
+                    if v_atom_gap_length > v_max_atom_gap_length then
+                        v_max_atom_gap_length := v_atom_gap_length;
+                    end if;
+                end if;
+
+                v_atom_burst_length := to_unsigned(1, COUNTER_W);
+            end if;
+
+            v_atom_gap_length := (others=>'0');
+            v_prev_atom_valid := '1';
+
+        else -- i_valid = '0'
+            -- Update burst info
+            if v_prev_atom_valid = '1' then
+                v_atom_burst_count := v_atom_burst_count + 1;
+                v_sum_atom_bursts  := v_sum_atom_bursts  + v_atom_burst_length;
+
+                if v_atom_burst_length > v_max_atom_burst_length then
+                    v_max_atom_burst_length := v_atom_burst_length;
+                end if;
+
+                if v_atom_burst_length < v_min_atom_burst_length or v_min_atom_burst_length = 0 then
+                    v_min_atom_burst_length := v_atom_burst_length;
+                end if;
+
+                v_atom_burst_length := (others=>'0');
+            end if;
+
+            v_atom_gap_length := v_atom_gap_length + 1;
+            v_prev_atom_valid := '0';
+        end if;
+    end procedure;
+
+    ------------------
+    -- Signals
+    ------------------
+
     -- Enable/Reset
     signal stats_en      : std_logic := '0';
     signal stats_reset   : std_logic := '0';
@@ -112,24 +199,45 @@ architecture Behavioral of decoder_stats is
     signal stats_reset_req   : std_logic := '0';
 
     -- Stats for the AXI transfer
-    signal total_cycles : unsigned(COUNTER_W-1 downto 0);
-    signal packet_count : unsigned(COUNTER_W-1 downto 0);
-    signal idle_cycles  : unsigned(COUNTER_W-1 downto 0);
+    signal total_cycles            : unsigned(COUNTER_W-1 downto 0);
+    signal idle_cycles             : unsigned(COUNTER_W-1 downto 0);
 
-    signal gap_counter  : unsigned(COUNTER_W-1 downto 0);
-    signal min_gap      : unsigned(COUNTER_W-1 downto 0);
-    signal max_gap      : unsigned(COUNTER_W-1 downto 0);
-    signal sum_gaps     : unsigned(COUNTER_W-1 downto 0);
-    signal gap_events   : unsigned(COUNTER_W-1 downto 0);
+    -- Packets-related
+    signal packet_count            : unsigned(COUNTER_W-1 downto 0);
 
-    signal burst_len    : unsigned(COUNTER_W-1 downto 0);
-    signal burst_count  : unsigned(COUNTER_W-1 downto 0);
-    signal max_burst    : unsigned(COUNTER_W-1 downto 0);
-    signal sum_burst    : unsigned(COUNTER_W-1 downto 0);
+    signal packet_burst_count      : unsigned(COUNTER_W-1 downto 0);
+    signal max_packet_burst_length : unsigned(COUNTER_W-1 downto 0);
+    signal min_packet_burst_length : unsigned(COUNTER_W-1 downto 0);
+    signal sum_packet_bursts       : unsigned(COUNTER_W-1 downto 0);
 
-    signal consecutive_packet_cycles : unsigned(COUNTER_W-1 downto 0);
+    signal packet_gap_count        : unsigned(COUNTER_W-1 downto 0);
+    signal min_packet_gap_length   : unsigned(COUNTER_W-1 downto 0);
+    signal max_packet_gap_length   : unsigned(COUNTER_W-1 downto 0);
+    signal sum_packet_gaps         : unsigned(COUNTER_W-1 downto 0);
 
-    signal prev_valid        : std_logic;
+    -- Atom-related
+    signal atom_count              : unsigned(COUNTER_W-1 downto 0);
+
+    signal atom_burst_count        : unsigned(COUNTER_W-1 downto 0);
+    signal min_atom_burst_length   : unsigned(COUNTER_W-1 downto 0);
+    signal max_atom_burst_length   : unsigned(COUNTER_W-1 downto 0);
+    signal sum_atom_bursts         : unsigned(COUNTER_W-1 downto 0);
+
+    signal atom_gap_count          : unsigned(COUNTER_W-1 downto 0);
+    signal min_atom_gap_length     : unsigned(COUNTER_W-1 downto 0);
+    signal max_atom_gap_length     : unsigned(COUNTER_W-1 downto 0);
+    signal sum_atom_gaps           : unsigned(COUNTER_W-1 downto 0);
+
+    -- Current info
+
+    signal packet_gap_length       : unsigned(COUNTER_W-1 downto 0);
+    signal packet_burst_length     : unsigned(COUNTER_W-1 downto 0);
+    signal prev_packet_valid       : std_logic;
+
+    signal atom_burst_length       : unsigned(COUNTER_W-1 downto 0);
+    signal atom_gap_length         : unsigned(COUNTER_W-1 downto 0);
+    signal prev_atom_valid         : std_logic;
+
     signal has_seen_transfer : std_logic;
 
     -- AXI-Lite signals
@@ -182,232 +290,188 @@ begin
     s_axi_rvalid  <= rvalid_i;
     s_axi_rresp   <= rresp_i;
 
-    -- Counting logic
+    -- Counting logic, unrolled to the 4 ports
     process(aclk)
+        -- Atom stats, kept through ports
+        variable v_prev_atom_valid       : std_logic;
+        variable v_atom_count            : unsigned(COUNTER_W-1 downto 0);
+
+        variable v_atom_burst_count      : unsigned(COUNTER_W-1 downto 0);
+        variable v_atom_burst_length     : unsigned(COUNTER_W-1 downto 0);
+        variable v_max_atom_burst_length : unsigned(COUNTER_W-1 downto 0);
+        variable v_min_atom_burst_length : unsigned(COUNTER_W-1 downto 0);
+        variable v_sum_atom_bursts       : unsigned(COUNTER_W-1 downto 0);
+
+        variable v_atom_gap_count        : unsigned(COUNTER_W-1 downto 0);
+        variable v_atom_gap_length       : unsigned(COUNTER_W-1 downto 0);
+        variable v_max_atom_gap_length   : unsigned(COUNTER_W-1 downto 0);
+        variable v_min_atom_gap_length   : unsigned(COUNTER_W-1 downto 0);
+        variable v_sum_atom_gaps         : unsigned(COUNTER_W-1 downto 0);
     begin
         if rising_edge(aclk) then
             if aresetn = '0' or stats_reset = '1' then
-                -- Cycle info
-                total_cycles   <= (others=>'0');
-                packet_count <= (others=>'0');
-                idle_cycles    <= (others=>'0');
+                total_cycles <= (others=>'0');
+                idle_cycles  <= (others=>'0');
 
-                -- Gap info (cycles between packets)
-                gap_counter   <= (others=>'0');
-                min_gap       <= (others=>'1');
-                max_gap       <= (others=>'0');
-                sum_gaps      <= (others=>'0');
-                gap_events    <= (others=>'0');
+                -- Packets-related
+                packet_count  <= (others=>'0');
 
-                -- Burst info (packs of valid packets)
-                burst_len     <= (others=>'0');
-                burst_count   <= (others=>'0');
-                max_burst     <= (others=>'0');
-                sum_burst     <= (others=>'0');
+                packet_burst_count      <= (others=>'0');
+                max_packet_burst_length <= (others=>'0');
+                min_packet_burst_length <= (others=>'0');
+                sum_packet_bursts       <= (others=>'0');
 
-                -- Current values
-                consecutive_packet_cycles <= (others=>'0');
-                has_seen_transfer           <= '0';
-                prev_valid                  <= '0';
-            else
-                 if stats_en = '1' then
-                    -- Global cycle count
-                    total_cycles <= total_cycles + 1;
+                packet_gap_count        <= (others=>'0');
+                min_packet_gap_length   <= (others=>'0');
+                max_packet_gap_length   <= (others=>'0');
+                sum_packet_gaps         <= (others=>'0');
 
-                    ----------------------------------------------
-                    -- Port 0
-                    if i_atom_valid0 = '1' then
+                -- Atom-related
+                atom_count              <= (others=>'0');
 
-                        packet_count <= packet_count + 1;
-                        burst_len    <= burst_len + 1;
+                atom_burst_count        <= (others=>'0');
+                min_atom_burst_length   <= (others=>'0');
+                max_atom_burst_length   <= (others=>'0');
+                sum_atom_bursts         <= (others=>'0');
 
-                        has_seen_transfer <= '1';  -- monotonic latch
+                atom_gap_count          <= (others=>'0');
+                min_atom_gap_length     <= (others=>'0');
+                max_atom_gap_length     <= (others=>'0');
+                sum_atom_gaps           <= (others=>'0');
 
-                        if prev_valid = '1' then
-                            consecutive_packet_cycles <= consecutive_packet_cycles + 1;
-                        else
-                            -- New burst
-                            burst_count <= burst_count + 1;
+                -- Current info
+                packet_gap_length       <= (others=>'0');
+                packet_burst_length     <= (others=>'0');
+                prev_packet_valid       <= '0';
 
-                            -- Gap is valid only after first-ever transfer
-                            if has_seen_transfer = '1' then
-                                gap_events <= gap_events + 1;
-                                sum_gaps   <= sum_gaps + gap_counter;
+                atom_burst_length       <= (others=>'0');
+                atom_gap_length         <= (others=>'0');
+                prev_atom_valid         <= '0';
 
-                                if gap_counter < min_gap then
-                                    min_gap <= gap_counter;
-                                end if;
+                -- Latch
+                has_seen_transfer       <= '0';
 
-                                if gap_counter > max_gap then
-                                    max_gap <= gap_counter;
-                                end if;
-                            end if;
+                -- Variables
+                v_atom_burst_count      := (others=>'0');
+                v_atom_burst_length     := (others=>'0');
+                v_min_atom_burst_length := (others=>'0');
+                v_max_atom_burst_length := (others=>'0');
+                v_sum_atom_bursts       := (others=>'0');
 
-                            gap_counter <= (others=>'0');
+                v_atom_gap_count        := (others=>'0');
+                v_atom_gap_length       := (others=>'0');
+                v_max_atom_gap_length   := (others=>'0');
+                v_min_atom_gap_length   := (others=>'0');
+                v_sum_atom_gaps         := (others=>'0');
+
+                v_prev_atom_valid       := '0';
+
+            elsif stats_en = '1' then
+                total_cycles <= total_cycles + 1;
+
+                ----------------------------------------------------------------
+                -- PACKET-LEVEL INFO
+
+                if (i_atom_valid0 or i_atom_valid1 or i_atom_valid2 or i_atom_valid3) = '1' then
+                    packet_count <= packet_count + 1;
+                    has_seen_transfer <= '1';
+
+                    if prev_packet_valid = '1' then
+                        packet_burst_length <= packet_burst_length + 1;
+                    else
+                        packet_burst_count <= packet_burst_count + 1;
+
+                        if has_seen_transfer = '1' then
+                            packet_gap_count <= packet_gap_count + 1;
+                            sum_packet_gaps  <= sum_packet_gaps + packet_gap_length;
+
+                            if packet_gap_length < min_packet_gap_length  then min_packet_gap_length  <= packet_gap_length; end if;
+                            if packet_gap_length > max_packet_gap_length  then max_packet_gap_length  <= packet_gap_length; end if;
                         end if;
 
-                    else -- i_atom_valid0
-                        idle_cycles <= idle_cycles + 1;
-                        gap_counter <= gap_counter + 1;
-
-                        -- Updating burst events
-                        if prev_valid = '1' then
-                            sum_burst <= sum_burst + burst_len;
-
-                            if burst_len > max_burst then
-                                max_burst <= burst_len;
-                            end if;
-
-                            burst_len <= (others=>'0');
-                        end if;
+                        packet_burst_length <= to_unsigned(1, COUNTER_W);
+                        packet_gap_length   <= (others=>'0');
                     end if;
 
-                    ----------------------------------------------
-                    -- Port 1
-                    if i_atom_valid1 = '1' then
+                    prev_packet_valid <= '1';
 
-                        packet_count <= packet_count + 1;
-                        burst_len    <= burst_len + 1;
+                else
+                    idle_cycles <= idle_cycles + 1;
+                    packet_gap_length <= packet_gap_length + 1;
 
-                        has_seen_transfer <= '1';  -- monotonic latch
+                    if prev_packet_valid = '1' then
+                        sum_packet_bursts <= sum_packet_bursts + packet_burst_length;
 
-                        if i_atom_valid0 = '1' then
-                            consecutive_packet_cycles <= consecutive_packet_cycles + 1;
-                        else
-                            -- New burst
-                            burst_count <= burst_count + 1;
-
-                            -- Gap is valid only after first-ever transfer
-                            if has_seen_transfer = '1' then
-                                gap_events <= gap_events + 1;
-                                sum_gaps   <= sum_gaps + gap_counter;
-
-                                if gap_counter < min_gap then
-                                    min_gap <= gap_counter;
-                                end if;
-
-                                if gap_counter > max_gap then
-                                    max_gap <= gap_counter;
-                                end if;
-                            end if;
-
-                            gap_counter <= (others=>'0');
+                        if packet_burst_length > max_packet_burst_length then
+                            max_packet_burst_length <= packet_burst_length;
                         end if;
 
-                    else -- i_atom_valid0
-                        idle_cycles <= idle_cycles + 1;
-                        gap_counter <= gap_counter + 1;
-
-                        -- Updating burst events
-                        if i_atom_valid0 = '1' then
-                            sum_burst <= sum_burst + burst_len;
-
-                            if burst_len > max_burst then
-                                max_burst <= burst_len;
-                            end if;
-
-                            burst_len <= (others=>'0');
+                        if packet_burst_length < min_packet_burst_length or min_packet_burst_length = 0 then
+                            min_packet_burst_length <= packet_burst_length;
                         end if;
+
+                        packet_burst_length <= (others=>'0');
                     end if;
 
-                    ----------------------------------------------
-                    -- Port 2
-                    if i_atom_valid2 = '1' then
-
-                        packet_count <= packet_count + 1;
-                        burst_len    <= burst_len + 1;
-
-                        has_seen_transfer <= '1';  -- monotonic latch
-
-                        if i_atom_valid1 = '1' then
-                            consecutive_packet_cycles <= consecutive_packet_cycles + 1;
-                        else
-                            -- New burst
-                            burst_count <= burst_count + 1;
-
-                            -- Gap is valid only after first-ever transfer
-                            if has_seen_transfer = '1' then
-                                gap_events <= gap_events + 1;
-                                sum_gaps   <= sum_gaps + gap_counter;
-
-                                if gap_counter < min_gap then
-                                    min_gap <= gap_counter;
-                                end if;
-
-                                if gap_counter > max_gap then
-                                    max_gap <= gap_counter;
-                                end if;
-                            end if;
-
-                            gap_counter <= (others=>'0');
-                        end if;
-
-                    else -- i_atom_valid0
-                        idle_cycles <= idle_cycles + 1;
-                        gap_counter <= gap_counter + 1;
-
-                        -- Updating burst events
-                        if i_atom_valid1 = '1' then
-                            sum_burst <= sum_burst + burst_len;
-
-                            if burst_len > max_burst then
-                                max_burst <= burst_len;
-                            end if;
-
-                            burst_len <= (others=>'0');
-                        end if;
-                    end if;
-
-                    ----------------------------------------------
-                    -- Port 3
-                    if i_atom_valid3 = '1' then
-
-                        packet_count <= packet_count + 1;
-                        burst_len    <= burst_len + 1;
-
-                        has_seen_transfer <= '1';  -- monotonic latch
-
-                        if i_atom_valid2 = '1' then
-                            consecutive_packet_cycles <= consecutive_packet_cycles + 1;
-                        else
-                            -- New burst
-                            burst_count <= burst_count + 1;
-
-                            -- Gap is valid only after first-ever transfer
-                            if has_seen_transfer = '1' then
-                                gap_events <= gap_events + 1;
-                                sum_gaps   <= sum_gaps + gap_counter;
-
-                                if gap_counter < min_gap then
-                                    min_gap <= gap_counter;
-                                end if;
-
-                                if gap_counter > max_gap then
-                                    max_gap <= gap_counter;
-                                end if;
-                            end if;
-
-                            gap_counter <= (others=>'0');
-                        end if;
-
-                    else -- i_atom_valid0
-                        idle_cycles <= idle_cycles + 1;
-                        gap_counter <= gap_counter + 1;
-
-                        -- Updating burst events
-                        if i_atom_valid2 = '1' then
-                            sum_burst <= sum_burst + burst_len;
-
-                            if burst_len > max_burst then
-                                max_burst <= burst_len;
-                            end if;
-
-                            burst_len <= (others=>'0');
-                        end if;
-                    end if;
-
-                    prev_valid <= i_atom_valid3;
+                    prev_packet_valid <= '0';
                 end if;
+
+                ----------------------------------------------------------------
+                -- ATOM-LEVEL INFO
+                ----------------------------------------------------------------
+
+                -- Initialize variables with current signal values
+                v_atom_count            := atom_count;
+                v_prev_atom_valid       := prev_atom_valid;
+
+                v_atom_burst_count      := atom_burst_count;
+                v_atom_burst_length     := atom_burst_length;
+                v_max_atom_burst_length := max_atom_burst_length;
+                v_min_atom_burst_length := min_atom_burst_length;
+                v_sum_atom_bursts       := sum_atom_bursts;
+
+                v_atom_gap_count       := atom_gap_count;
+                v_atom_gap_length      := atom_gap_length;
+                v_max_atom_gap_length  := max_atom_gap_length;
+                v_min_atom_gap_length  := min_atom_gap_length;
+                v_sum_atom_gaps        := sum_atom_gaps;
+
+                process_atom(
+                    i_atom_valid0, has_seen_transfer, v_prev_atom_valid, v_atom_count,
+                    v_atom_burst_length, v_atom_burst_count, v_max_atom_burst_length, v_min_atom_burst_length, v_sum_atom_bursts,
+                    v_atom_gap_length, v_atom_gap_count, v_min_atom_gap_length, v_max_atom_gap_length, v_sum_atom_gaps
+                );
+                process_atom(
+                    i_atom_valid1, has_seen_transfer, v_prev_atom_valid, v_atom_count,
+                    v_atom_burst_length, v_atom_burst_count, v_max_atom_burst_length, v_min_atom_burst_length, v_sum_atom_bursts,
+                    v_atom_gap_length, v_atom_gap_count, v_min_atom_gap_length, v_max_atom_gap_length, v_sum_atom_gaps
+                );
+                process_atom(
+                    i_atom_valid2, has_seen_transfer, v_prev_atom_valid, v_atom_count,
+                    v_atom_burst_length, v_atom_burst_count, v_max_atom_burst_length, v_min_atom_burst_length, v_sum_atom_bursts,
+                    v_atom_gap_length, v_atom_gap_count, v_min_atom_gap_length, v_max_atom_gap_length, v_sum_atom_gaps
+                );
+                process_atom(
+                    i_atom_valid3, has_seen_transfer, v_prev_atom_valid, v_atom_count,
+                    v_atom_burst_length, v_atom_burst_count, v_max_atom_burst_length, v_min_atom_burst_length, v_sum_atom_bursts,
+                    v_atom_gap_length, v_atom_gap_count, v_min_atom_gap_length, v_max_atom_gap_length, v_sum_atom_gaps
+                );
+
+                -- Commit back to signals
+                atom_count            <= v_atom_count;
+                prev_atom_valid       <= v_prev_atom_valid;
+
+                atom_burst_count      <= v_atom_burst_count;
+                atom_burst_length     <= v_atom_burst_length;
+                max_atom_burst_length <= v_max_atom_burst_length;
+                min_atom_burst_length <= v_min_atom_burst_length;
+                sum_atom_bursts       <= v_sum_atom_bursts;
+
+                atom_gap_count        <= v_atom_gap_count;
+                atom_gap_length       <= v_atom_gap_length;
+                max_atom_gap_length   <= v_max_atom_gap_length;
+                min_atom_gap_length   <= v_min_atom_gap_length;
+                sum_atom_gaps         <= v_sum_atom_gaps;
             end if;
         end if;
     end process;
@@ -483,18 +547,54 @@ begin
                     rresp_i  <= "00";
 
                     case araddr_reg is
+                        -- Offsets:
+                        --   0x00: Control (bit 0 = stats enable, bit 1 = reset)
+                        --   0x04: Total cycles
+                        --   0x08: Idle cycles
+                        --   0x0C: Packet count
+                        --   0x10: Packet burst count
+                        --   0x14: Min packet burst length
+                        --   0x18: Max packet burst length
+                        --   0x1C: Sum packet bursts
+                        --   0x20: Packet gap count
+                        --   0x24: Min packet gap length
+                        --   0x28: Max packet gap length
+                        --   0x2C: Sum packet gaps
+                        --   0x30: Atom count
+                        --   0x34: Atom burst count
+                        --   0x38: Min atom burst length
+                        --   0x3C: Max atom burst length
+                        --   0x40: Sum atom bursts
+                        --   0x44: Atom gap count
+                        --   0x48: Min atom gap length
+                        --   0x4C: Max atom gap length
+                        --   0x50: Sum atom gaps
+
                         -- reset bit not readable as it is self-clearing
                         when x"00" => s_axi_rdata <= (31 downto 1=>'0') & stats_en;
                         when x"04" => s_axi_rdata <= std_logic_vector(total_cycles(31 downto 0));
-                        when x"08" => s_axi_rdata <= std_logic_vector(packet_count(31 downto 0));
-                        when x"0C" => s_axi_rdata <= std_logic_vector(idle_cycles(31 downto 0));
-                        when x"10" => s_axi_rdata <= std_logic_vector(burst_count(31 downto 0));
-                        when x"14" => s_axi_rdata <= std_logic_vector(max_burst(31 downto 0));
-                        when x"18" => s_axi_rdata <= std_logic_vector(min_gap(31 downto 0));
-                        when x"1C" => s_axi_rdata <= std_logic_vector(max_gap(31 downto 0));
-                        when x"20" => s_axi_rdata <= std_logic_vector(gap_events(31 downto 0));
-                        when x"24" => s_axi_rdata <= std_logic_vector(sum_burst(31 downto 0));
-                        when x"28" => s_axi_rdata <= std_logic_vector(sum_gaps(31 downto 0));
+                        when x"08" => s_axi_rdata <= std_logic_vector(idle_cycles(31 downto 0));
+                        -- Packet
+                        when x"0C" => s_axi_rdata <= std_logic_vector(packet_count(31 downto 0));
+                        when x"10" => s_axi_rdata <= std_logic_vector(packet_burst_count(31 downto 0));
+                        when x"14" => s_axi_rdata <= std_logic_vector(min_packet_burst_length(31 downto 0));
+                        when x"18" => s_axi_rdata <= std_logic_vector(max_packet_burst_length(31 downto 0));
+                        when x"1C" => s_axi_rdata <= std_logic_vector(sum_packet_bursts(31 downto 0));
+                        when x"20" => s_axi_rdata <= std_logic_vector(packet_gap_count(31 downto 0));
+                        when x"24" => s_axi_rdata <= std_logic_vector(min_packet_gap_length(31 downto 0));
+                        when x"28" => s_axi_rdata <= std_logic_vector(max_packet_gap_length(31 downto 0));
+                        when x"2C" => s_axi_rdata <= std_logic_vector(sum_packet_gaps(31 downto 0));
+                        -- Atom
+                        when x"30" => s_axi_rdata <= std_logic_vector(atom_count(31 downto 0));
+                        when x"34" => s_axi_rdata <= std_logic_vector(atom_burst_count(31 downto 0));
+                        when x"38" => s_axi_rdata <= std_logic_vector(min_atom_burst_length (31 downto 0));
+                        when x"3C" => s_axi_rdata <= std_logic_vector(max_atom_burst_length (31 downto 0));
+                        when x"40" => s_axi_rdata <= std_logic_vector(sum_atom_bursts(31 downto 0));
+                        when x"44" => s_axi_rdata <= std_logic_vector(atom_gap_count(31 downto 0));
+                        when x"48" => s_axi_rdata <= std_logic_vector(min_atom_gap_length(31 downto 0));
+                        when x"4C" => s_axi_rdata <= std_logic_vector(max_atom_gap_length(31 downto 0));
+                        when x"50" => s_axi_rdata <= std_logic_vector(sum_atom_gaps(31 downto 0));
+
                         when others => s_axi_rdata <= (others=>'0');
                     end case;
 

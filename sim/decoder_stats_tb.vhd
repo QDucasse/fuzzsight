@@ -318,15 +318,34 @@ begin
     simulation_process: process
         -- Variables to store read results
         variable total_cycles : std_logic_vector(31 downto 0);
-        variable packet_count : std_logic_vector(31 downto 0);
         variable idle_cycles  : std_logic_vector(31 downto 0);
-        variable burst_count  : std_logic_vector(31 downto 0);
-        variable max_burst    : std_logic_vector(31 downto 0);
-        variable min_gap      : std_logic_vector(31 downto 0);
-        variable max_gap      : std_logic_vector(31 downto 0);
-        variable gap_events   : std_logic_vector(31 downto 0);
-        variable sum_burst    : std_logic_vector(31 downto 0);
-        variable sum_gaps     : std_logic_vector(31 downto 0);
+
+        -- Packets
+        variable packet_count            : std_logic_vector(31 downto 0);
+
+        variable packet_burst_count      : std_logic_vector(31 downto 0);
+        variable min_packet_burst_length : std_logic_vector(31 downto 0);
+        variable max_packet_burst_length : std_logic_vector(31 downto 0);
+        variable sum_packet_bursts       : std_logic_vector(31 downto 0);
+
+        variable packet_gap_count        : std_logic_vector(31 downto 0);
+        variable min_packet_gap_length   : std_logic_vector(31 downto 0);
+        variable max_packet_gap_length   : std_logic_vector(31 downto 0);
+        variable sum_packet_gaps         : std_logic_vector(31 downto 0);
+
+        -- Atoms
+        variable atom_count            : std_logic_vector(31 downto 0);
+
+        variable atom_burst_count      : std_logic_vector(31 downto 0);
+        variable min_atom_burst_length : std_logic_vector(31 downto 0);
+        variable max_atom_burst_length : std_logic_vector(31 downto 0);
+        variable sum_atom_bursts       : std_logic_vector(31 downto 0);
+
+        variable atom_gap_count        : std_logic_vector(31 downto 0);
+        variable min_atom_gap_length   : std_logic_vector(31 downto 0);
+        variable max_atom_gap_length   : std_logic_vector(31 downto 0);
+        variable sum_atom_gaps         : std_logic_vector(31 downto 0);
+
     begin
         -- wait for reset
         wait until reset = '1';
@@ -466,68 +485,136 @@ begin
         -- AXI-LITE READ: dump stats registers
         ----------------------------------------------------------------
 
-        -- Read total_cycles (0x04)
+        -- Read total cycles (0x04)
         axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
               s_axi_arready, s_axi_rvalid, clock,
               x"04", total_cycles);
 
-        -- Read packet_count (0x08)
+        -- Read idle cycles (0x08)
         axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
               s_axi_arready, s_axi_rvalid, clock,
-              x"08", packet_count);
+              x"08", idle_cycles);
 
-        -- Read idle_cycles (0x0C)
-        axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
-              s_axi_arready, s_axi_rvalid, clock,
-              x"0C", idle_cycles);
+        -------------
+        -- PACKETS
 
-        -- Read burst_count (0x10)
+        -- Read packet count (0x0C)
         axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
               s_axi_arready, s_axi_rvalid, clock,
-              x"10", burst_count);
+              x"0C", packet_count);
 
-        -- Read max_burst (0x14)
+        -- Read packet burst count (0x10)
         axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
               s_axi_arready, s_axi_rvalid, clock,
-              x"14", max_burst);
+              x"10", packet_burst_count);
 
-        -- Read min_gap (0x18)
+        -- Read min packet burst length (0x14)
         axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
               s_axi_arready, s_axi_rvalid, clock,
-              x"18", min_gap);
+              x"14", min_packet_burst_length);
 
-        -- Read max_gap (0x1C)
+        -- Read max packet burst length (0x18)
         axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
               s_axi_arready, s_axi_rvalid, clock,
-              x"1C", max_gap);
+              x"18", max_packet_burst_length);
 
-        -- Read gap_events (0x20)
+        -- Read sum packet bursts (0x1C)
         axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
               s_axi_arready, s_axi_rvalid, clock,
-              x"20", gap_events);
+              x"1C", sum_packet_bursts);
 
-        -- Read sum_burst (0x24)
+        -- Read packet gap count (0x20)
         axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
               s_axi_arready, s_axi_rvalid, clock,
-              x"24", sum_burst);
+              x"20", packet_gap_count);
 
-        -- Read sum_gaps (0x28)
+        -- Read min packet gap length (0x24)
         axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
               s_axi_arready, s_axi_rvalid, clock,
-              x"28", sum_gaps);
+              x"24", min_packet_gap_length);
+
+        -- Read max packet burst length (0x28)
+        axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
+              s_axi_arready, s_axi_rvalid, clock,
+              x"28", max_packet_gap_length);
+
+        -- Read sum packet bursts (0x2C)
+        axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
+              s_axi_arready, s_axi_rvalid, clock,
+              x"2C", sum_packet_gaps);
+
+        -------------
+        -- ATOMS
+
+        -- Read atom count (0x30)
+        axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
+              s_axi_arready, s_axi_rvalid, clock,
+              x"30", atom_count);
+
+        -- Read atom burst count (0x34)
+        axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
+              s_axi_arready, s_axi_rvalid, clock,
+              x"34", atom_burst_count);
+
+        -- Read min atom burst length (0x38)
+        axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
+              s_axi_arready, s_axi_rvalid, clock,
+              x"38", min_atom_burst_length);
+
+        -- Read max atom burst length (0x3C)
+        axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
+              s_axi_arready, s_axi_rvalid, clock,
+              x"3C", max_atom_burst_length);
+
+        -- Read sum atom bursts (0x40)
+        axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
+              s_axi_arready, s_axi_rvalid, clock,
+              x"40", sum_atom_bursts);
+
+        -- Read atom gap count (0x44)
+        axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
+              s_axi_arready, s_axi_rvalid, clock,
+              x"44", atom_gap_count);
+
+        -- Read min atom gap length (0x44)
+        axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
+              s_axi_arready, s_axi_rvalid, clock,
+              x"44", min_atom_gap_length);
+
+        -- Read max atom gap length (0x48)
+        axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
+              s_axi_arready, s_axi_rvalid, clock,
+              x"48", max_atom_gap_length);
+
+        -- Read atom gap count (0x50)
+        axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
+              s_axi_arready, s_axi_rvalid, clock,
+              x"50", sum_atom_gaps);
 
         -- Print all stats in a simple report
         report "=== Decoder Stats ===";
-        report "Total cycles  : " & integer'image(to_integer(unsigned(total_cycles)));
-        report "Packet count  : " & integer'image(to_integer(unsigned(packet_count)));
-        report "Idle cycles   : " & integer'image(to_integer(unsigned(idle_cycles)));
-        report "Burst count   : " & integer'image(to_integer(unsigned(burst_count)));
-        report "Max burst     : " & integer'image(to_integer(unsigned(max_burst)));
-        report "Min gap       : " & integer'image(to_integer(unsigned(min_gap)));
-        report "Max gap       : " & integer'image(to_integer(unsigned(max_gap)));
-        report "Gap events    : " & integer'image(to_integer(unsigned(gap_events)));
-        report "Sum burst     : " & integer'image(to_integer(unsigned(sum_burst)));
-        report "Sum gaps      : " & integer'image(to_integer(unsigned(sum_gaps)));
+        report "Total cycles : " & integer'image(to_integer(unsigned(total_cycles)));
+        report "Idle cycles  : " & integer'image(to_integer(unsigned(idle_cycles)));
+        report "--- Packets";
+        report "Packet count            : " & integer'image(to_integer(unsigned(packet_count)));
+        report "Packet burst count      : " & integer'image(to_integer(unsigned(packet_burst_count)));
+        report "Min packet burst length : " & integer'image(to_integer(unsigned(min_packet_burst_length)));
+        report "Max packet burst length : " & integer'image(to_integer(unsigned(max_packet_burst_length)));
+        report "Sum packet bursts       : " & integer'image(to_integer(unsigned(sum_packet_bursts)));
+        report "Packet gap count        : " & integer'image(to_integer(unsigned(packet_gap_count)));
+        report "Min packet gap length   : " & integer'image(to_integer(unsigned(min_packet_gap_length)));
+        report "Max packet gap length   : " & integer'image(to_integer(unsigned(max_packet_gap_length)));
+        report "Sum packet gaps         : " & integer'image(to_integer(unsigned(sum_packet_gaps)));
+        report "--- Atoms";
+        report "Atom count              : " & integer'image(to_integer(unsigned(atom_count)));
+        report "Atom burst count        : " & integer'image(to_integer(unsigned(atom_burst_count)));
+        report "Min atom burst length   : " & integer'image(to_integer(unsigned(min_atom_burst_length)));
+        report "Max atom burst length   : " & integer'image(to_integer(unsigned(max_atom_burst_length)));
+        report "Sum atom bursts         : " & integer'image(to_integer(unsigned(sum_atom_bursts)));
+        report "Atom gap count          : " & integer'image(to_integer(unsigned(atom_gap_count)));
+        report "Min atom gap length     : " & integer'image(to_integer(unsigned(min_atom_gap_length)));
+        report "Max atom gap length     : " & integer'image(to_integer(unsigned(max_atom_gap_length)));
+        report "Sum atom gaps           : " & integer'image(to_integer(unsigned(sum_atom_gaps)));
         report "=====================";
 
 
@@ -546,69 +633,137 @@ begin
         -- AXI-LITE READ: confirm counters reset
         ----------------------------------------------------------------
 
-                -- Read total_cycles (0x04)
+        -- Read total cycles (0x04)
         axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
               s_axi_arready, s_axi_rvalid, clock,
               x"04", total_cycles);
 
-        -- Read packet_count (0x08)
+        -- Read idle cycles (0x08)
         axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
               s_axi_arready, s_axi_rvalid, clock,
-              x"08", packet_count);
+              x"08", idle_cycles);
 
-        -- Read idle_cycles (0x0C)
-        axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
-              s_axi_arready, s_axi_rvalid, clock,
-              x"0C", idle_cycles);
+        -------------
+        -- PACKETS
 
-        -- Read burst_count (0x10)
+        -- Read packet count (0x0C)
         axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
               s_axi_arready, s_axi_rvalid, clock,
-              x"10", burst_count);
+              x"0C", packet_count);
 
-        -- Read max_burst (0x14)
+        -- Read packet burst count (0x10)
         axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
               s_axi_arready, s_axi_rvalid, clock,
-              x"14", max_burst);
+              x"10", packet_burst_count);
 
-        -- Read min_gap (0x18)
+        -- Read min packet burst length (0x14)
         axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
               s_axi_arready, s_axi_rvalid, clock,
-              x"18", min_gap);
+              x"14", min_packet_burst_length);
 
-        -- Read max_gap (0x1C)
+        -- Read max packet burst length (0x18)
         axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
               s_axi_arready, s_axi_rvalid, clock,
-              x"1C", max_gap);
+              x"18", max_packet_burst_length);
 
-        -- Read gap_events (0x20)
+        -- Read sum packet bursts (0x1C)
         axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
               s_axi_arready, s_axi_rvalid, clock,
-              x"20", gap_events);
+              x"1C", sum_packet_bursts);
 
-        -- Read sum_burst (0x24)
+        -- Read packet gap count (0x20)
         axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
               s_axi_arready, s_axi_rvalid, clock,
-              x"24", sum_burst);
+              x"20", packet_gap_count);
 
-        -- Read sum_gaps (0x28)
+        -- Read min packet gap length (0x24)
         axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
               s_axi_arready, s_axi_rvalid, clock,
-              x"28", sum_gaps);
+              x"24", min_packet_gap_length);
+
+        -- Read max packet burst length (0x28)
+        axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
+              s_axi_arready, s_axi_rvalid, clock,
+              x"28", max_packet_gap_length);
+
+        -- Read sum packet bursts (0x2C)
+        axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
+              s_axi_arready, s_axi_rvalid, clock,
+              x"2C", sum_packet_gaps);
+
+        -------------
+        -- ATOMS
+
+        -- Read atom count (0x30)
+        axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
+              s_axi_arready, s_axi_rvalid, clock,
+              x"30", atom_count);
+
+        -- Read atom burst count (0x34)
+        axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
+              s_axi_arready, s_axi_rvalid, clock,
+              x"34", atom_burst_count);
+
+        -- Read min atom burst length (0x38)
+        axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
+              s_axi_arready, s_axi_rvalid, clock,
+              x"38", min_atom_burst_length);
+
+        -- Read max atom burst length (0x3C)
+        axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
+              s_axi_arready, s_axi_rvalid, clock,
+              x"3C", max_atom_burst_length);
+
+        -- Read sum atom bursts (0x40)
+        axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
+              s_axi_arready, s_axi_rvalid, clock,
+              x"40", sum_atom_bursts);
+
+        -- Read atom gap count (0x44)
+        axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
+              s_axi_arready, s_axi_rvalid, clock,
+              x"44", atom_gap_count);
+
+        -- Read min atom gap length (0x44)
+        axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
+              s_axi_arready, s_axi_rvalid, clock,
+              x"44", min_atom_gap_length);
+
+        -- Read max atom gap length (0x48)
+        axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
+              s_axi_arready, s_axi_rvalid, clock,
+              x"48", max_atom_gap_length);
+
+        -- Read atom gap count (0x50)
+        axi_lite_read(s_axi_araddr, s_axi_arvalid, s_axi_rdata,
+              s_axi_arready, s_axi_rvalid, clock,
+              x"50", sum_atom_gaps);
 
         -- Print all stats in a simple report
-        report "=== AXI Stats ====";
-        report "Total cycles   : " & integer'image(to_integer(unsigned(total_cycles)));
-        report "Transfer count : " & integer'image(to_integer(unsigned(packet_count)));
-        report "Idle cycles    : " & integer'image(to_integer(unsigned(idle_cycles)));
-        report "Burst count    : " & integer'image(to_integer(unsigned(burst_count)));
-        report "Max burst      : " & integer'image(to_integer(unsigned(max_burst)));
-        report "Min gap        : " & integer'image(to_integer(unsigned(min_gap)));
-        report "Max gap        : " & integer'image(to_integer(unsigned(max_gap)));
-        report "Gap events     : " & integer'image(to_integer(unsigned(gap_events)));
-        report "Sum burst      : " & integer'image(to_integer(unsigned(sum_burst)));
-        report "Sum gaps       : " & integer'image(to_integer(unsigned(sum_gaps)));
-        report "==================";
+        report "=== Decoder Stats ===";
+        report "Total cycles : " & integer'image(to_integer(unsigned(total_cycles)));
+        report "Idle cycles  : " & integer'image(to_integer(unsigned(idle_cycles)));
+        report "--- Packets";
+        report "Packet count            : " & integer'image(to_integer(unsigned(packet_count)));
+        report "Packet burst count      : " & integer'image(to_integer(unsigned(packet_burst_count)));
+        report "Min packet burst length : " & integer'image(to_integer(unsigned(min_packet_burst_length)));
+        report "Max packet burst length : " & integer'image(to_integer(unsigned(max_packet_burst_length)));
+        report "Sum packet bursts       : " & integer'image(to_integer(unsigned(sum_packet_bursts)));
+        report "Packet gap count        : " & integer'image(to_integer(unsigned(packet_gap_count)));
+        report "Min packet gap length   : " & integer'image(to_integer(unsigned(min_packet_gap_length)));
+        report "Max packet gap length   : " & integer'image(to_integer(unsigned(max_packet_gap_length)));
+        report "Sum packet gaps         : " & integer'image(to_integer(unsigned(sum_packet_gaps)));
+        report "--- Atoms";
+        report "Atom count              : " & integer'image(to_integer(unsigned(atom_count)));
+        report "Atom burst count        : " & integer'image(to_integer(unsigned(atom_burst_count)));
+        report "Min atom burst length   : " & integer'image(to_integer(unsigned(min_atom_burst_length)));
+        report "Max atom burst length   : " & integer'image(to_integer(unsigned(max_atom_burst_length)));
+        report "Sum atom bursts         : " & integer'image(to_integer(unsigned(sum_atom_bursts)));
+        report "Atom gap count          : " & integer'image(to_integer(unsigned(atom_gap_count)));
+        report "Min atom gap length     : " & integer'image(to_integer(unsigned(min_atom_gap_length)));
+        report "Max atom gap length     : " & integer'image(to_integer(unsigned(max_atom_gap_length)));
+        report "Sum atom gaps           : " & integer'image(to_integer(unsigned(sum_atom_gaps)));
+        report "=====================";
 
 
         wait;
