@@ -96,7 +96,7 @@ void dec_stats_print(dec_stats_t *handle)
 
     for (size_t i = 0; i < n; i++)
     {
-        printf("%-15s : %u\n",
+        printf("%-25s : %u\n",
                stats[i].name,
                dec_stats_read(handle, stats[i].reg));
     }

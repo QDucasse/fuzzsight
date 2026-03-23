@@ -20,7 +20,7 @@ architecture Simulation of decoder_stats_tb is
     constant ADDR_WIDTH : integer := 8;
 
     -- Component definition
-    component decoder_stats
+    component decoder_stats_lut
     port (
         aclk     : in  std_logic;
         aresetn  : in  std_logic;
@@ -245,7 +245,7 @@ begin
     reset <= '0', '1' after 6 ns;
 
     -- DUT instantiation WITH SIGNALS
-    DUT: decoder_stats port map (
+    DUT: decoder_stats_lut port map (
         aclk     => clock,
         aresetn  => reset,
 

@@ -464,7 +464,6 @@ begin
 
                 if (i_atom_valid0 or i_atom_valid1 or i_atom_valid2 or i_atom_valid3) = '1' then
                     packet_count <= packet_count + 1;
-                    has_seen_transfer <= '1';
 
                     if prev_packet_valid = '1' then
                         packet_burst_length <= packet_burst_length + 1;
@@ -479,6 +478,7 @@ begin
                             if packet_gap_length > max_packet_gap_length  then max_packet_gap_length  <= packet_gap_length; end if;
                         end if;
 
+                        has_seen_transfer <= '1';
                         packet_burst_length <= to_unsigned(1, COUNTER_W);
                         packet_gap_length   <= (others=>'0');
                     end if;
@@ -551,9 +551,6 @@ begin
                 atom_gap_length         <= (others=>'0');
                 prev_atom_valid         <= 0;
 
-                -- Latch
-                has_seen_transfer       <= '0';
-
                 -- Variables
                 v_atom_burst_count      := (others=>'0');
                 v_atom_burst_length     := (others=>'0');
@@ -609,6 +606,7 @@ begin
                         v_min_atom_burst_length := v_atom_burst_length;
                     end if;
 
+                    -- Reset ongoing length
                     v_atom_burst_length := (others => '0');
                 end if;
 
@@ -629,6 +627,7 @@ begin
                         v_min_atom_gap_length := v_atom_gap_length;
                     end if;
 
+                    -- Reset ongoing length
                     v_atom_gap_length := (others => '0');
                 end if;
 
@@ -656,6 +655,9 @@ begin
                     if v_atom_burst_length_resolved < v_min_atom_burst_length or v_min_atom_burst_length = 0 then
                         v_min_atom_burst_length := v_atom_burst_length_resolved;
                     end if;
+
+                    -- Reset ongoing length
+                    v_atom_burst_length := (others => '0');
                 end if;
 
                 -- A gap ends in these valids -> update gap info
@@ -678,6 +680,9 @@ begin
                     if v_atom_gap_length_resolved < v_min_atom_gap_length or v_min_atom_gap_length = 0 then
                         v_min_atom_gap_length := v_atom_gap_length_resolved;
                     end if;
+
+                    -- Reset ongoing length
+                    v_atom_gap_length := (others => '0');
                 end if;
 
                 ----------------------------------------------------------------
@@ -696,6 +701,9 @@ begin
                     if resize(lut_entry.inner_bursts, COUNTER_W) < v_min_atom_burst_length or v_min_atom_burst_length = 0 then
                         v_min_atom_burst_length := resize(lut_entry.inner_bursts, COUNTER_W);
                     end if;
+
+                    -- Reset ongoing length
+                    v_atom_burst_length := (others => '0');
                 end if;
 
                 -- Inner gap found -> update gap info
@@ -711,6 +719,9 @@ begin
                     if resize(lut_entry.inner_gaps, COUNTER_W) < v_min_atom_gap_length or v_min_atom_gap_length = 0 then
                         v_min_atom_gap_length := resize(lut_entry.inner_gaps, COUNTER_W);
                     end if;
+
+                    -- Reset ongoing length
+                    v_atom_gap_length := (others => '0');
                 end if;
 
                 ----------------------------------------------------------------
