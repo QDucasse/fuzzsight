@@ -47,7 +47,10 @@ entity edge_extractor is
 
         -- Output edge index
         o_index   : out std_logic_vector(63 downto 0);
+
+        -- Output fifo info
         o_valid   : out std_logic;
+        o_empty   : out std_logic;
         i_ready   : in  std_logic
     );
 end entity;
@@ -141,6 +144,7 @@ begin
                 -- Outputs
                 o_index     <= (others => '0');
                 o_valid     <= '0';
+                o_empty     <= '1';
 
                 -- Variables
                 v_prev_slice  := (others=>'0');
@@ -175,6 +179,13 @@ begin
                     v_fifo_count  := v_fifo_count - 1;
                 else
                     o_valid <= '0';
+                end if;
+
+                -- Update empty flag
+                if v_fifo_count = 0 then
+                    o_empty <= '1';
+                else
+                    o_empty <= '0';
                 end if;
 
                 -- Commit variables to the signals

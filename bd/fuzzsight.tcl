@@ -44,9 +44,9 @@ if { [string first $scripts_vivado_version $current_vivado_version] == -1 } {
 # source fuzzsight_script.tcl
 
 
-# The design that will be created by this Tcl script contains the following
+# The design that will be created by this Tcl script contains the following 
 # module references:
-# frame_generator, frame_deformatter, byte_stream_demux, byte_stream_compactor, etm_decoder, byte_stream_compactor, stm_decoder
+# frame_generator, frame_deformatter, byte_stream_demux, byte_stream_compactor, etm_decoder, byte_stream_compactor, stm_decoder, decoder_stats_lut, edge_extractor, bitmap_writer
 
 # Please add the sources of those modules before sourcing this Tcl script.
 
@@ -57,6 +57,7 @@ if { [string first $scripts_vivado_version $current_vivado_version] == -1 } {
 set list_projs [get_projects -quiet]
 if { $list_projs eq "" } {
    create_project project_1 myproj -part xczu7ev-ffvc1156-2-e
+   set_property BOARD_PART xilinx.com:zcu104:part0:1.1 [current_project]
 }
 
 
@@ -101,7 +102,7 @@ if { ${design_name} eq "" } {
    set errMsg "Design <$design_name> already exists in your project, please set the variable <design_name> to another value."
    set nRet 1
 } elseif { [get_files -quiet ${design_name}.bd] ne "" } {
-   # USE CASES:
+   # USE CASES: 
    #    6) Current opened design, has components, but diff names, design_name exists in project.
    #    7) No opened design, design_name exists in project.
 
@@ -135,9 +136,11 @@ set bCheckIPsPassed 1
 ##################################################################
 set bCheckIPs 1
 if { $bCheckIPs == 1 } {
-   set list_check_ips "\
+   set list_check_ips "\ 
 xilinx.com:ip:zynq_ultra_ps_e:3.5\
 xilinx.com:ip:proc_sys_reset:5.0\
+xilinx.com:ip:axi_dma:7.1\
+xilinx.com:ip:smartconnect:1.0\
 "
 
    set list_ips_missing ""
@@ -162,7 +165,7 @@ xilinx.com:ip:proc_sys_reset:5.0\
 ##################################################################
 set bCheckModules 1
 if { $bCheckModules == 1 } {
-   set list_check_mods "\
+   set list_check_mods "\ 
 frame_generator\
 frame_deformatter\
 byte_stream_demux\
@@ -170,6 +173,9 @@ byte_stream_compactor\
 etm_decoder\
 byte_stream_compactor\
 stm_decoder\
+decoder_stats_lut\
+edge_extractor\
+bitmap_writer\
 "
 
    set list_mods_missing ""
@@ -1351,7 +1357,7 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
      catch {common::send_gid_msg -ssname BD::TCL -id 2096 -severity "ERROR" "Unable to referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
      return 1
    }
-
+  
   # Create instance: proc_sys_reset_0, and set properties
   set proc_sys_reset_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:proc_sys_reset:5.0 proc_sys_reset_0 ]
 
@@ -1365,7 +1371,7 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
      catch {common::send_gid_msg -ssname BD::TCL -id 2096 -severity "ERROR" "Unable to referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
      return 1
    }
-
+  
   # Create instance: byte_stream_demux_0, and set properties
   set block_name byte_stream_demux
   set block_cell_name byte_stream_demux_0
@@ -1376,7 +1382,7 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
      catch {common::send_gid_msg -ssname BD::TCL -id 2096 -severity "ERROR" "Unable to referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
      return 1
    }
-
+  
   # Create instance: byte_stream_compactor_0, and set properties
   set block_name byte_stream_compactor
   set block_cell_name byte_stream_compactor_0
@@ -1387,7 +1393,7 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
      catch {common::send_gid_msg -ssname BD::TCL -id 2096 -severity "ERROR" "Unable to referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
      return 1
    }
-
+  
   # Create instance: etm_decoder_0, and set properties
   set block_name etm_decoder
   set block_cell_name etm_decoder_0
@@ -1398,7 +1404,7 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
      catch {common::send_gid_msg -ssname BD::TCL -id 2096 -severity "ERROR" "Unable to referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
      return 1
    }
-
+  
   # Create instance: byte_stream_compactor_1, and set properties
   set block_name byte_stream_compactor
   set block_cell_name byte_stream_compactor_1
@@ -1409,7 +1415,7 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
      catch {common::send_gid_msg -ssname BD::TCL -id 2096 -severity "ERROR" "Unable to referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
      return 1
    }
-
+  
   # Create instance: stm_decoder_0, and set properties
   set block_name stm_decoder
   set block_cell_name stm_decoder_0
@@ -1420,8 +1426,81 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
      catch {common::send_gid_msg -ssname BD::TCL -id 2096 -severity "ERROR" "Unable to referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
      return 1
    }
+  
+  # Create instance: decoder_stats_lut_0, and set properties
+  set block_name decoder_stats_lut
+  set block_cell_name decoder_stats_lut_0
+  if { [catch {set decoder_stats_lut_0 [create_bd_cell -type module -reference $block_name $block_cell_name] } errmsg] } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2095 -severity "ERROR" "Unable to add referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
+     return 1
+   } elseif { $decoder_stats_lut_0 eq "" } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2096 -severity "ERROR" "Unable to referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
+     return 1
+   }
+  
+  # Create instance: edge_extractor_0, and set properties
+  set block_name edge_extractor
+  set block_cell_name edge_extractor_0
+  if { [catch {set edge_extractor_0 [create_bd_cell -type module -reference $block_name $block_cell_name] } errmsg] } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2095 -severity "ERROR" "Unable to add referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
+     return 1
+   } elseif { $edge_extractor_0 eq "" } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2096 -severity "ERROR" "Unable to referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
+     return 1
+   }
+  
+  # Create instance: bitmap_writer_0, and set properties
+  set block_name bitmap_writer
+  set block_cell_name bitmap_writer_0
+  if { [catch {set bitmap_writer_0 [create_bd_cell -type module -reference $block_name $block_cell_name] } errmsg] } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2095 -severity "ERROR" "Unable to add referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
+     return 1
+   } elseif { $bitmap_writer_0 eq "" } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2096 -severity "ERROR" "Unable to referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
+     return 1
+   }
+  
+  # Create instance: axi_dma_0, and set properties
+  set axi_dma_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_dma:7.1 axi_dma_0 ]
+  set_property -dict [list \
+    CONFIG.c_include_mm2s {0} \
+    CONFIG.c_include_s2mm {1} \
+    CONFIG.c_include_sg {0} \
+  ] $axi_dma_0
+
+
+  # Create instance: axi_smc, and set properties
+  set axi_smc [ create_bd_cell -type ip -vlnv xilinx.com:ip:smartconnect:1.0 axi_smc ]
+  set_property -dict [list \
+    CONFIG.NUM_CLKS {2} \
+    CONFIG.NUM_MI {3} \
+    CONFIG.NUM_SI {1} \
+  ] $axi_smc
+
+
+  # Create instance: rst_zynq_ultra_ps_pl_250M, and set properties
+  set rst_zynq_ultra_ps_pl_250M [ create_bd_cell -type ip -vlnv xilinx.com:ip:proc_sys_reset:5.0 rst_zynq_ultra_ps_pl_250M ]
+
+  # Create instance: axi_smc_1, and set properties
+  set axi_smc_1 [ create_bd_cell -type ip -vlnv xilinx.com:ip:smartconnect:1.0 axi_smc_1 ]
+  set_property -dict [list \
+    CONFIG.NUM_CLKS {2} \
+    CONFIG.NUM_SI {1} \
+  ] $axi_smc_1
+
+
+  # Create interface connections
+  connect_bd_intf_net -intf_net axi_dma_0_M_AXI_S2MM [get_bd_intf_pins axi_dma_0/M_AXI_S2MM] [get_bd_intf_pins axi_smc_1/S00_AXI]
+  connect_bd_intf_net -intf_net axi_smc_1_M00_AXI [get_bd_intf_pins axi_smc_1/M00_AXI] [get_bd_intf_pins zynq_ultra_ps_pl/S_AXI_HP0_FPD]
+  connect_bd_intf_net -intf_net axi_smc_M00_AXI [get_bd_intf_pins axi_smc/M00_AXI] [get_bd_intf_pins axi_dma_0/S_AXI_LITE]
+  connect_bd_intf_net -intf_net axi_smc_M01_AXI [get_bd_intf_pins axi_smc/M01_AXI] [get_bd_intf_pins bitmap_writer_0/s_axi]
+  connect_bd_intf_net -intf_net axi_smc_M02_AXI [get_bd_intf_pins axi_smc/M02_AXI] [get_bd_intf_pins decoder_stats_lut_0/s_axi]
+  connect_bd_intf_net -intf_net bitmap_writer_0_m_axis [get_bd_intf_pins bitmap_writer_0/m_axis] [get_bd_intf_pins axi_dma_0/S_AXIS_S2MM]
+  connect_bd_intf_net -intf_net zynq_ultra_ps_pl_M_AXI_HPM0_LPD [get_bd_intf_pins zynq_ultra_ps_pl/M_AXI_HPM0_LPD] [get_bd_intf_pins axi_smc/S00_AXI]
 
   # Create port connections
+  connect_bd_net -net bitmap_writer_0_o_fifo_ready  [get_bd_pins bitmap_writer_0/o_fifo_ready] \
+  [get_bd_pins edge_extractor_0/i_ready]
   connect_bd_net -net byte_stream_compactor_0_o_data  [get_bd_pins byte_stream_compactor_0/o_data] \
   [get_bd_pins etm_decoder_0/i_data]
   connect_bd_net -net byte_stream_compactor_0_o_valid  [get_bd_pins byte_stream_compactor_0/o_valid] \
@@ -1437,6 +1516,76 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
   [get_bd_pins byte_stream_compactor_0/i_keep]
   connect_bd_net -net byte_stream_demux_0_o_keeps  [get_bd_pins byte_stream_demux_0/o_keeps] \
   [get_bd_pins byte_stream_compactor_1/i_keep]
+  connect_bd_net -net decoder_stats_lut_0_o_address_reg_0_0  [get_bd_pins decoder_stats_lut_0/o_address_reg_0_0] \
+  [get_bd_pins edge_extractor_0/i_address_reg_0_0]
+  connect_bd_net -net decoder_stats_lut_0_o_address_reg_0_1  [get_bd_pins decoder_stats_lut_0/o_address_reg_0_1] \
+  [get_bd_pins edge_extractor_0/i_address_reg_0_1]
+  connect_bd_net -net decoder_stats_lut_0_o_address_reg_0_2  [get_bd_pins decoder_stats_lut_0/o_address_reg_0_2] \
+  [get_bd_pins edge_extractor_0/i_address_reg_0_2]
+  connect_bd_net -net decoder_stats_lut_0_o_address_reg_0_3  [get_bd_pins decoder_stats_lut_0/o_address_reg_0_3] \
+  [get_bd_pins edge_extractor_0/i_address_reg_0_3]
+  connect_bd_net -net decoder_stats_lut_0_o_atom_elements0  [get_bd_pins decoder_stats_lut_0/o_atom_elements0] \
+  [get_bd_pins edge_extractor_0/i_atom_elements0]
+  connect_bd_net -net decoder_stats_lut_0_o_atom_elements1  [get_bd_pins decoder_stats_lut_0/o_atom_elements1] \
+  [get_bd_pins edge_extractor_0/i_atom_elements1]
+  connect_bd_net -net decoder_stats_lut_0_o_atom_elements2  [get_bd_pins decoder_stats_lut_0/o_atom_elements2] \
+  [get_bd_pins edge_extractor_0/i_atom_elements2]
+  connect_bd_net -net decoder_stats_lut_0_o_atom_elements3  [get_bd_pins decoder_stats_lut_0/o_atom_elements3] \
+  [get_bd_pins edge_extractor_0/i_atom_elements3]
+  connect_bd_net -net decoder_stats_lut_0_o_atom_nb0  [get_bd_pins decoder_stats_lut_0/o_atom_nb0] \
+  [get_bd_pins edge_extractor_0/i_atom_nb0]
+  connect_bd_net -net decoder_stats_lut_0_o_atom_nb1  [get_bd_pins decoder_stats_lut_0/o_atom_nb1] \
+  [get_bd_pins edge_extractor_0/i_atom_nb1]
+  connect_bd_net -net decoder_stats_lut_0_o_atom_nb2  [get_bd_pins decoder_stats_lut_0/o_atom_nb2] \
+  [get_bd_pins edge_extractor_0/i_atom_nb2]
+  connect_bd_net -net decoder_stats_lut_0_o_atom_nb3  [get_bd_pins decoder_stats_lut_0/o_atom_nb3] \
+  [get_bd_pins edge_extractor_0/i_atom_nb3]
+  connect_bd_net -net decoder_stats_lut_0_o_atom_valid0  [get_bd_pins decoder_stats_lut_0/o_atom_valid0] \
+  [get_bd_pins edge_extractor_0/i_atom_valid0]
+  connect_bd_net -net decoder_stats_lut_0_o_atom_valid1  [get_bd_pins decoder_stats_lut_0/o_atom_valid1] \
+  [get_bd_pins edge_extractor_0/i_atom_valid1]
+  connect_bd_net -net decoder_stats_lut_0_o_atom_valid2  [get_bd_pins decoder_stats_lut_0/o_atom_valid2] \
+  [get_bd_pins edge_extractor_0/i_atom_valid2]
+  connect_bd_net -net decoder_stats_lut_0_o_atom_valid3  [get_bd_pins decoder_stats_lut_0/o_atom_valid3] \
+  [get_bd_pins edge_extractor_0/i_atom_valid3]
+  connect_bd_net -net edge_extractor_0_o_empty  [get_bd_pins edge_extractor_0/o_empty] \
+  [get_bd_pins bitmap_writer_0/i_fifo_empty]
+  connect_bd_net -net edge_extractor_0_o_index  [get_bd_pins edge_extractor_0/o_index] \
+  [get_bd_pins bitmap_writer_0/i_fifo_index]
+  connect_bd_net -net edge_extractor_0_o_valid  [get_bd_pins edge_extractor_0/o_valid] \
+  [get_bd_pins bitmap_writer_0/i_fifo_valid]
+  connect_bd_net -net etm_decoder_0_o_address_reg_0_0  [get_bd_pins etm_decoder_0/o_address_reg_0_0] \
+  [get_bd_pins decoder_stats_lut_0/i_address_reg_0_0]
+  connect_bd_net -net etm_decoder_0_o_address_reg_0_1  [get_bd_pins etm_decoder_0/o_address_reg_0_1] \
+  [get_bd_pins decoder_stats_lut_0/i_address_reg_0_1]
+  connect_bd_net -net etm_decoder_0_o_address_reg_0_2  [get_bd_pins etm_decoder_0/o_address_reg_0_2] \
+  [get_bd_pins decoder_stats_lut_0/i_address_reg_0_2]
+  connect_bd_net -net etm_decoder_0_o_address_reg_0_3  [get_bd_pins etm_decoder_0/o_address_reg_0_3] \
+  [get_bd_pins decoder_stats_lut_0/i_address_reg_0_3]
+  connect_bd_net -net etm_decoder_0_o_atom_elements0  [get_bd_pins etm_decoder_0/o_atom_elements0] \
+  [get_bd_pins decoder_stats_lut_0/i_atom_elements0]
+  connect_bd_net -net etm_decoder_0_o_atom_elements1  [get_bd_pins etm_decoder_0/o_atom_elements1] \
+  [get_bd_pins decoder_stats_lut_0/i_atom_elements1]
+  connect_bd_net -net etm_decoder_0_o_atom_elements2  [get_bd_pins etm_decoder_0/o_atom_elements2] \
+  [get_bd_pins decoder_stats_lut_0/i_atom_elements2]
+  connect_bd_net -net etm_decoder_0_o_atom_elements3  [get_bd_pins etm_decoder_0/o_atom_elements3] \
+  [get_bd_pins decoder_stats_lut_0/i_atom_elements3]
+  connect_bd_net -net etm_decoder_0_o_atom_nb0  [get_bd_pins etm_decoder_0/o_atom_nb0] \
+  [get_bd_pins decoder_stats_lut_0/i_atom_nb0]
+  connect_bd_net -net etm_decoder_0_o_atom_nb1  [get_bd_pins etm_decoder_0/o_atom_nb1] \
+  [get_bd_pins decoder_stats_lut_0/i_atom_nb1]
+  connect_bd_net -net etm_decoder_0_o_atom_nb2  [get_bd_pins etm_decoder_0/o_atom_nb2] \
+  [get_bd_pins decoder_stats_lut_0/i_atom_nb2]
+  connect_bd_net -net etm_decoder_0_o_atom_nb3  [get_bd_pins etm_decoder_0/o_atom_nb3] \
+  [get_bd_pins decoder_stats_lut_0/i_atom_nb3]
+  connect_bd_net -net etm_decoder_0_o_atom_valid0  [get_bd_pins etm_decoder_0/o_atom_valid0] \
+  [get_bd_pins decoder_stats_lut_0/i_atom_valid0]
+  connect_bd_net -net etm_decoder_0_o_atom_valid1  [get_bd_pins etm_decoder_0/o_atom_valid1] \
+  [get_bd_pins decoder_stats_lut_0/i_atom_valid1]
+  connect_bd_net -net etm_decoder_0_o_atom_valid2  [get_bd_pins etm_decoder_0/o_atom_valid2] \
+  [get_bd_pins decoder_stats_lut_0/i_atom_valid2]
+  connect_bd_net -net etm_decoder_0_o_atom_valid3  [get_bd_pins etm_decoder_0/o_atom_valid3] \
+  [get_bd_pins decoder_stats_lut_0/i_atom_valid3]
   connect_bd_net -net frame_deformatter_0_o_data  [get_bd_pins frame_deformatter_0/o_data] \
   [get_bd_pins byte_stream_demux_0/i_data]
   connect_bd_net -net frame_deformatter_0_o_ids  [get_bd_pins frame_deformatter_0/o_ids] \
@@ -1456,7 +1605,14 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
   [get_bd_pins byte_stream_compactor_0/aresetn] \
   [get_bd_pins etm_decoder_0/aresetn] \
   [get_bd_pins byte_stream_compactor_1/aresetn] \
-  [get_bd_pins stm_decoder_0/aresetn]
+  [get_bd_pins stm_decoder_0/aresetn] \
+  [get_bd_pins decoder_stats_lut_0/aresetn] \
+  [get_bd_pins bitmap_writer_0/aresetn] \
+  [get_bd_pins axi_dma_0/axi_resetn] \
+  [get_bd_pins axi_smc_1/aresetn] \
+  [get_bd_pins edge_extractor_0/aresetn]
+  connect_bd_net -net rst_zynq_ultra_ps_pl_250M_peripheral_aresetn  [get_bd_pins rst_zynq_ultra_ps_pl_250M/peripheral_aresetn] \
+  [get_bd_pins axi_smc/aresetn]
   connect_bd_net -net zynq_ultra_ps_pl_pl_clk0  [get_bd_pins zynq_ultra_ps_pl/pl_clk0] \
   [get_bd_pins zynq_ultra_ps_pl/pl_ps_trace_clk] \
   [get_bd_pins proc_sys_reset_0/slowest_sync_clk] \
@@ -1466,22 +1622,41 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
   [get_bd_pins byte_stream_compactor_0/aclk] \
   [get_bd_pins etm_decoder_0/aclk] \
   [get_bd_pins byte_stream_compactor_1/aclk] \
-  [get_bd_pins stm_decoder_0/aclk]
+  [get_bd_pins stm_decoder_0/aclk] \
+  [get_bd_pins decoder_stats_lut_0/aclk] \
+  [get_bd_pins bitmap_writer_0/aclk] \
+  [get_bd_pins axi_dma_0/s_axi_lite_aclk] \
+  [get_bd_pins axi_dma_0/m_axi_s2mm_aclk] \
+  [get_bd_pins axi_smc/aclk1] \
+  [get_bd_pins axi_smc_1/aclk] \
+  [get_bd_pins edge_extractor_0/aclk]
   connect_bd_net -net zynq_ultra_ps_pl_pl_clk1  [get_bd_pins zynq_ultra_ps_pl/pl_clk1] \
   [get_bd_pins zynq_ultra_ps_pl/saxihp0_fpd_aclk] \
-  [get_bd_pins zynq_ultra_ps_pl/maxihpm0_lpd_aclk]
+  [get_bd_pins zynq_ultra_ps_pl/maxihpm0_lpd_aclk] \
+  [get_bd_pins axi_smc/aclk] \
+  [get_bd_pins rst_zynq_ultra_ps_pl_250M/slowest_sync_clk] \
+  [get_bd_pins axi_smc_1/aclk1]
   connect_bd_net -net zynq_ultra_ps_pl_pl_resetn0  [get_bd_pins zynq_ultra_ps_pl/pl_resetn0] \
   [get_bd_pins proc_sys_reset_0/ext_reset_in]
+  connect_bd_net -net zynq_ultra_ps_pl_pl_resetn1  [get_bd_pins zynq_ultra_ps_pl/pl_resetn1] \
+  [get_bd_pins rst_zynq_ultra_ps_pl_250M/ext_reset_in]
   connect_bd_net -net zynq_ultra_ps_pl_ps_pl_tracedata  [get_bd_pins zynq_ultra_ps_pl/ps_pl_tracedata] \
   [get_bd_pins frame_generator_0/i_data]
 
   # Create address segments
+  assign_bd_address -offset 0x80000000 -range 0x00010000 -target_address_space [get_bd_addr_spaces zynq_ultra_ps_pl/Data] [get_bd_addr_segs axi_dma_0/S_AXI_LITE/Reg] -force
+  assign_bd_address -offset 0x80010000 -range 0x00010000 -target_address_space [get_bd_addr_spaces zynq_ultra_ps_pl/Data] [get_bd_addr_segs bitmap_writer_0/s_axi/reg0] -force
+  assign_bd_address -offset 0x80020000 -range 0x00001000 -target_address_space [get_bd_addr_spaces zynq_ultra_ps_pl/Data] [get_bd_addr_segs decoder_stats_lut_0/s_axi/reg0] -force
+  assign_bd_address -offset 0x00000000 -range 0x80000000 -target_address_space [get_bd_addr_spaces axi_dma_0/Data_S2MM] [get_bd_addr_segs zynq_ultra_ps_pl/SAXIGP2/HP0_DDR_LOW] -force
+  assign_bd_address -offset 0xC0000000 -range 0x20000000 -target_address_space [get_bd_addr_spaces axi_dma_0/Data_S2MM] [get_bd_addr_segs zynq_ultra_ps_pl/SAXIGP2/HP0_QSPI] -force
+
+  # Exclude Address Segments
+  exclude_bd_addr_seg -offset 0xFF000000 -range 0x01000000 -target_address_space [get_bd_addr_spaces axi_dma_0/Data_S2MM] [get_bd_addr_segs zynq_ultra_ps_pl/SAXIGP2/HP0_LPS_OCM]
 
 
   # Restore current instance
   current_bd_instance $oldCurInst
 
-  validate_bd_design
   save_bd_design
 }
 # End of create_root_design()
@@ -1493,4 +1668,6 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
 
 create_root_design ""
 
+
+common::send_gid_msg -ssname BD::TCL -id 2053 -severity "WARNING" "This Tcl script was generated from a block design that has not been validated. It is possible that design <$design_name> may result in errors during validation."
 
