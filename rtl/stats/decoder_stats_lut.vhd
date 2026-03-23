@@ -383,14 +383,14 @@ architecture Behavioral of decoder_stats_lut is
     signal has_seen_transfer : std_logic;
 
     -- AXI-Lite signals
-    signal awready_i : std_logic := '0';
-    signal wready_i  : std_logic := '0';
-    signal bvalid_i  : std_logic := '0';
-    signal bresp_i   : std_logic_vector(1 downto 0) := (others=>'0');
+    signal awready : std_logic := '0';
+    signal wready  : std_logic := '0';
+    signal bvalid  : std_logic := '0';
+    signal bresp   : std_logic_vector(1 downto 0) := (others=>'0');
 
-    signal arready_i : std_logic := '0';
-    signal rvalid_i  : std_logic := '0';
-    signal rresp_i   : std_logic_vector(1 downto 0) := (others=>'0');
+    signal arready : std_logic := '0';
+    signal rvalid  : std_logic := '0';
+    signal rresp   : std_logic_vector(1 downto 0) := (others=>'0');
 
     signal awaddr_reg : std_logic_vector(ADDR_WIDTH-1 downto 0);
     signal araddr_reg : std_logic_vector(ADDR_WIDTH-1 downto 0);
@@ -426,14 +426,14 @@ begin
     o_atom_nb3        <= i_atom_nb3;
 
     -- AXI-Lite outputs
-    s_axi_awready <= awready_i;
-    s_axi_wready  <= wready_i;
-    s_axi_bvalid  <= bvalid_i;
-    s_axi_bresp   <= bresp_i;
+    s_axi_awready <= awready;
+    s_axi_wready  <= wready;
+    s_axi_bvalid  <= bvalid;
+    s_axi_bresp   <= bresp;
 
-    s_axi_arready <= arready_i;
-    s_axi_rvalid  <= rvalid_i;
-    s_axi_rresp   <= rresp_i;
+    s_axi_arready <= arready;
+    s_axi_rvalid  <= rvalid;
+    s_axi_rresp   <= rresp;
 
     -- Counting logic - packets
     packet_counting_process: process(aclk)
@@ -768,41 +768,41 @@ begin
     begin
         if rising_edge(aclk) then
             if aresetn = '0' then
-                awready_i <= '0';
-                wready_i  <= '0';
-                bvalid_i  <= '0';
-                arready_i <= '0';
-                rvalid_i  <= '0';
-                aw_seen   <= '0';
-                w_seen    <= '0';
-                read_in_progress  <= '0';
+                awready <= '0';
+                wready  <= '0';
+                bvalid  <= '0';
+                arready <= '0';
+                rvalid  <= '0';
+                aw_seen <= '0';
+                w_seen  <= '0';
+                read_in_progress <= '0';
                 stats_en <= '0';
 
             else
                 -- WRITE CHANNEL
 
                 -- Accept address
-                if (awready_i = '0' and s_axi_awvalid = '1') then
-                    awready_i  <= '1';
+                if (awready = '0' and s_axi_awvalid = '1') then
+                    awready    <= '1';
                     awaddr_reg <= s_axi_awaddr;
                     aw_seen    <= '1';
                 else
-                    awready_i  <= '0';
+                    awready  <= '0';
                 end if;
 
                 -- Accept data
-                if (wready_i = '0' and s_axi_wvalid = '1') then
-                    wready_i  <= '1';
+                if (wready = '0' and s_axi_wvalid = '1') then
+                    wready    <= '1';
                     wdata_reg <= s_axi_wdata;
                     w_seen    <= '1';
                 else
-                    wready_i  <= '0';
+                    wready  <= '0';
                 end if;
 
                 -- Generate write response
-                if (aw_seen = '1' and w_seen = '1' and bvalid_i = '0') then
-                    bvalid_i <= '1';
-                    bresp_i  <= "00";
+                if (aw_seen = '1' and w_seen = '1' and bvalid = '0') then
+                    bvalid <= '1';
+                    bresp  <= "00";
 
                     -- Register write
                     if awaddr_reg = x"00" then
@@ -810,8 +810,8 @@ begin
                         stats_reset_req <= wdata_reg(1);
                     end if;
 
-                elsif (bvalid_i = '1' and s_axi_bready = '1') then
-                    bvalid_i <= '0';
+                elsif (bvalid = '1' and s_axi_bready = '1') then
+                    bvalid   <= '0';
                     aw_seen  <= '0';
                     w_seen   <= '0';
                 end if;
@@ -820,18 +820,18 @@ begin
                 -- READ CHANNEL
 
                 -- Accept address
-                if (arready_i = '0' and s_axi_arvalid = '1' and read_in_progress = '0') then
-                    arready_i        <= '1';
+                if (arready = '0' and s_axi_arvalid = '1' and read_in_progress = '0') then
+                    arready          <= '1';
                     araddr_reg       <= s_axi_araddr;
                     read_in_progress <= '1';
                 else
-                    arready_i        <= '0';
+                    arready          <= '0';
                 end if;
 
                 -- Provide data
-                if (read_in_progress = '1' and rvalid_i = '0') then
-                    rvalid_i <= '1';
-                    rresp_i  <= "00";
+                if (read_in_progress = '1' and rvalid = '0') then
+                    rvalid <= '1';
+                    rresp  <= "00";
 
                     case araddr_reg is
                         -- Offsets:
@@ -885,8 +885,8 @@ begin
                         when others => s_axi_rdata <= (others=>'0');
                     end case;
 
-                elsif (rvalid_i = '1' and s_axi_rready = '1') then
-                    rvalid_i <= '0';
+                elsif (rvalid = '1' and s_axi_rready = '1') then
+                    rvalid <= '0';
                     read_in_progress <= '0';
                 end if;
             end if;
