@@ -70,7 +70,7 @@ architecture Behavioral of edge_extractor is
     function count_n_atoms(bits : std_logic_vector; nb : unsigned) return unsigned is
         variable count : unsigned(ATOM_NB_SIZE-1 downto 0) := (others => '0'); -- max 24
     begin
-        for i in 0 to to_integer(nb)-1 loop
+        for i in 0 to ATOM_NB_SIZE-1 loop
             if bits(i) = '0' then
                 count := count + 1;
             end if;

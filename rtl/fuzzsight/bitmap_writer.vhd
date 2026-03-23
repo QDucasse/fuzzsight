@@ -83,6 +83,12 @@ architecture Behavioral of bitmap_writer is
     ---------------
     signal bram_mem : bram_t := (others => (others => '0'));
 
+    -- FIFO
+    signal fifo_ready : std_logic;
+
+    -- AXIS
+    signal tvalid : std_logic;
+
     -- DMA
     signal dma_start : std_logic := '0';
     signal dma_busy  : std_logic := '0';
@@ -112,6 +118,12 @@ architecture Behavioral of bitmap_writer is
 
 begin
 
+    -- FIFO output
+    o_fifo_ready <= fifo_ready;
+
+    -- AXI-Stream output
+    m_axis_tvalid <= tvalid; -- Needed because we read it too!
+
     -- AXI-Lite outputs
     s_axi_awready <= awready;
     s_axi_wready  <= wready;
@@ -129,16 +141,16 @@ begin
     begin
         if rising_edge(aclk) then
             if aresetn = '0' then
-                o_fifo_ready <= '1';
+                fifo_ready <= '1';
                 bram_mem   <= (others => (others => '0'));
             else
                 -- clear the bitmap if requested
                 if clear_bitmap = '1' and dma_busy = '0' then
                     bram_mem <= (others => (others => '0'));
                     -- stall FIFO while clearing
-                    o_fifo_ready <= '0';
+                    fifo_ready <= '0';
 
-                elsif i_fifo_valid = '1' and o_fifo_ready = '1' then
+                elsif i_fifo_valid = '1' and fifo_ready = '1' then
                     -- compute address (truncate to ADDR_WIDTH)
                     v_addr := to_integer(unsigned(i_fifo_index(ADDR_WIDTH-1 downto 0)));
 
@@ -150,10 +162,10 @@ begin
                         bram_mem(v_addr) <= std_logic_vector(v_curr + 1);
                     end if;
 
-                    o_fifo_ready <= '1';
+                    fifo_ready <= '1';
                 else
                     -- No valid input, keep ready high
-                    o_fifo_ready <= '1';
+                    fifo_ready <= '1';
                 end if;
             end if;
         end if;
@@ -168,7 +180,7 @@ begin
     begin
         if rising_edge(aclk) then
             if aresetn = '0' then
-                m_axis_tvalid <= '0';
+                tvalid        <= '0';
                 m_axis_tlast  <= '0';
                 dma_busy      <= '0';
                 dma_done      <= '0';
@@ -179,7 +191,7 @@ begin
                 case state is
                     -- Waiting for transfer
                     when IDLE =>
-                        m_axis_tvalid <= '0';
+                        tvalid <= '0';
                         m_axis_tlast  <= '0';
                         dma_done      <= '0';
                         dma_busy      <= '0';
@@ -193,7 +205,7 @@ begin
                     -- Streaming BRAM to AXI-DMA
                     when STREAM =>
                         -- Load data if not valid or downstream ready
-                        if (m_axis_tvalid = '0') or (m_axis_tready = '1') then
+                        if (tvalid = '0') or (m_axis_tready = '1') then
                             -- Pack bytes into AXIS WIDTH
                             for i in 0 to (AXIS_WIDTH/8)-1 loop
                                 if (word_idx + i) < MAP_SIZE then
@@ -211,7 +223,7 @@ begin
                             end if;
 
                             m_axis_tlast  <= next_last;
-                            m_axis_tvalid <= '1';
+                            tvalid <= '1';
 
                             -- Advance only if downstream ready
                             if m_axis_tready = '1' then
@@ -225,7 +237,7 @@ begin
 
                     -- Transfer completed
                     when DONE =>
-                        m_axis_tvalid <= '0';
+                        tvalid        <= '0';
                         m_axis_tlast  <= '0';
                         dma_busy      <= '0';
                         dma_done      <= '1';
