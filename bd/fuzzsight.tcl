@@ -46,7 +46,7 @@ if { [string first $scripts_vivado_version $current_vivado_version] == -1 } {
 
 # The design that will be created by this Tcl script contains the following 
 # module references:
-# frame_generator, frame_deformatter, byte_stream_demux, byte_stream_compactor, etm_decoder, byte_stream_compactor, stm_decoder, decoder_stats_lut, edge_extractor, bitmap_writer
+# decoder_stats_lut, edge_extractor, bitmap_writer_bram, bitmap_reader_bram, etm_decoder, byte_stream_compactor, byte_stream_demux, byte_stream_compactor, stm_decoder, frame_deformatter, frame_generator
 
 # Please add the sources of those modules before sourcing this Tcl script.
 
@@ -141,6 +141,7 @@ xilinx.com:ip:zynq_ultra_ps_e:3.5\
 xilinx.com:ip:proc_sys_reset:5.0\
 xilinx.com:ip:axi_dma:7.1\
 xilinx.com:ip:smartconnect:1.0\
+xilinx.com:ip:blk_mem_gen:8.4\
 "
 
    set list_ips_missing ""
@@ -166,16 +167,17 @@ xilinx.com:ip:smartconnect:1.0\
 set bCheckModules 1
 if { $bCheckModules == 1 } {
    set list_check_mods "\ 
-frame_generator\
-frame_deformatter\
-byte_stream_demux\
-byte_stream_compactor\
-etm_decoder\
-byte_stream_compactor\
-stm_decoder\
 decoder_stats_lut\
 edge_extractor\
-bitmap_writer\
+bitmap_writer_bram\
+bitmap_reader_bram\
+etm_decoder\
+byte_stream_compactor\
+byte_stream_demux\
+byte_stream_compactor\
+stm_decoder\
+frame_deformatter\
+frame_generator\
 "
 
    set list_mods_missing ""
@@ -203,6 +205,223 @@ if { $bCheckIPsPassed != 1 } {
 # DESIGN PROCs
 ##################################################################
 
+
+# Hierarchical cell: decoder
+proc create_hier_cell_decoder { parentCell nameHier } {
+
+  variable script_folder
+
+  if { $parentCell eq "" || $nameHier eq "" } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2092 -severity "ERROR" "create_hier_cell_decoder() - Empty argument(s)!"}
+     return
+  }
+
+  # Get object for parentCell
+  set parentObj [get_bd_cells $parentCell]
+  if { $parentObj == "" } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2090 -severity "ERROR" "Unable to find parent cell <$parentCell>!"}
+     return
+  }
+
+  # Make sure parentObj is hier blk
+  set parentType [get_property TYPE $parentObj]
+  if { $parentType ne "hier" } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2091 -severity "ERROR" "Parent <$parentObj> has TYPE = <$parentType>. Expected to be <hier>."}
+     return
+  }
+
+  # Save current instance; Restore later
+  set oldCurInst [current_bd_instance .]
+
+  # Set parent object as current
+  current_bd_instance $parentObj
+
+  # Create cell and set as current instance
+  set hier_obj [create_bd_cell -type hier $nameHier]
+  current_bd_instance $hier_obj
+
+  # Create interface pins
+
+  # Create pins
+  create_bd_pin -dir I -type rst aresetn
+  create_bd_pin -dir I -from 31 -to 0 i_data
+  create_bd_pin -dir I -type clk aclk
+  create_bd_pin -dir O o_atom_valid0
+  create_bd_pin -dir O -from 63 -to 0 o_address_reg_0_0
+  create_bd_pin -dir O -from 23 -to 0 o_atom_elements0
+  create_bd_pin -dir O -from 4 -to 0 o_atom_nb0
+  create_bd_pin -dir O o_atom_valid1
+  create_bd_pin -dir O -from 63 -to 0 o_address_reg_0_1
+  create_bd_pin -dir O -from 23 -to 0 o_atom_elements1
+  create_bd_pin -dir O -from 4 -to 0 o_atom_nb1
+  create_bd_pin -dir O o_atom_valid2
+  create_bd_pin -dir O -from 63 -to 0 o_address_reg_0_2
+  create_bd_pin -dir O -from 23 -to 0 o_atom_elements2
+  create_bd_pin -dir O -from 4 -to 0 o_atom_nb2
+  create_bd_pin -dir O o_atom_valid3
+  create_bd_pin -dir O -from 63 -to 0 o_address_reg_0_3
+  create_bd_pin -dir O -from 23 -to 0 o_atom_elements3
+  create_bd_pin -dir O -from 4 -to 0 o_atom_nb3
+
+  # Create instance: etm_decoder_0, and set properties
+  set block_name etm_decoder
+  set block_cell_name etm_decoder_0
+  if { [catch {set etm_decoder_0 [create_bd_cell -type module -reference $block_name $block_cell_name] } errmsg] } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2095 -severity "ERROR" "Unable to add referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
+     return 1
+   } elseif { $etm_decoder_0 eq "" } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2096 -severity "ERROR" "Unable to referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
+     return 1
+   }
+  
+  # Create instance: byte_stream_compactor_0, and set properties
+  set block_name byte_stream_compactor
+  set block_cell_name byte_stream_compactor_0
+  if { [catch {set byte_stream_compactor_0 [create_bd_cell -type module -reference $block_name $block_cell_name] } errmsg] } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2095 -severity "ERROR" "Unable to add referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
+     return 1
+   } elseif { $byte_stream_compactor_0 eq "" } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2096 -severity "ERROR" "Unable to referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
+     return 1
+   }
+  
+  # Create instance: byte_stream_demux_0, and set properties
+  set block_name byte_stream_demux
+  set block_cell_name byte_stream_demux_0
+  if { [catch {set byte_stream_demux_0 [create_bd_cell -type module -reference $block_name $block_cell_name] } errmsg] } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2095 -severity "ERROR" "Unable to add referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
+     return 1
+   } elseif { $byte_stream_demux_0 eq "" } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2096 -severity "ERROR" "Unable to referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
+     return 1
+   }
+  
+  # Create instance: byte_stream_compactor_1, and set properties
+  set block_name byte_stream_compactor
+  set block_cell_name byte_stream_compactor_1
+  if { [catch {set byte_stream_compactor_1 [create_bd_cell -type module -reference $block_name $block_cell_name] } errmsg] } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2095 -severity "ERROR" "Unable to add referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
+     return 1
+   } elseif { $byte_stream_compactor_1 eq "" } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2096 -severity "ERROR" "Unable to referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
+     return 1
+   }
+  
+  # Create instance: stm_decoder_0, and set properties
+  set block_name stm_decoder
+  set block_cell_name stm_decoder_0
+  if { [catch {set stm_decoder_0 [create_bd_cell -type module -reference $block_name $block_cell_name] } errmsg] } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2095 -severity "ERROR" "Unable to add referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
+     return 1
+   } elseif { $stm_decoder_0 eq "" } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2096 -severity "ERROR" "Unable to referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
+     return 1
+   }
+  
+  # Create instance: frame_deformatter_0, and set properties
+  set block_name frame_deformatter
+  set block_cell_name frame_deformatter_0
+  if { [catch {set frame_deformatter_0 [create_bd_cell -type module -reference $block_name $block_cell_name] } errmsg] } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2095 -severity "ERROR" "Unable to add referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
+     return 1
+   } elseif { $frame_deformatter_0 eq "" } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2096 -severity "ERROR" "Unable to referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
+     return 1
+   }
+  
+  # Create instance: frame_generator_0, and set properties
+  set block_name frame_generator
+  set block_cell_name frame_generator_0
+  if { [catch {set frame_generator_0 [create_bd_cell -type module -reference $block_name $block_cell_name] } errmsg] } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2095 -severity "ERROR" "Unable to add referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
+     return 1
+   } elseif { $frame_generator_0 eq "" } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2096 -severity "ERROR" "Unable to referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
+     return 1
+   }
+  
+  # Create port connections
+  connect_bd_net -net aclk_1  [get_bd_pins aclk] \
+  [get_bd_pins frame_generator_0/aclk] \
+  [get_bd_pins frame_deformatter_0/aclk] \
+  [get_bd_pins byte_stream_demux_0/aclk] \
+  [get_bd_pins byte_stream_compactor_0/aclk] \
+  [get_bd_pins byte_stream_compactor_1/aclk] \
+  [get_bd_pins stm_decoder_0/aclk] \
+  [get_bd_pins etm_decoder_0/aclk]
+  connect_bd_net -net aresetn_1  [get_bd_pins aresetn] \
+  [get_bd_pins frame_generator_0/aresetn] \
+  [get_bd_pins frame_deformatter_0/aresetn] \
+  [get_bd_pins byte_stream_demux_0/aresetn] \
+  [get_bd_pins byte_stream_compactor_0/aresetn] \
+  [get_bd_pins byte_stream_compactor_1/aresetn] \
+  [get_bd_pins stm_decoder_0/aresetn] \
+  [get_bd_pins etm_decoder_0/aresetn]
+  connect_bd_net -net byte_stream_compactor_0_o_data  [get_bd_pins byte_stream_compactor_0/o_data] \
+  [get_bd_pins etm_decoder_0/i_data]
+  connect_bd_net -net byte_stream_compactor_0_o_valid  [get_bd_pins byte_stream_compactor_0/o_valid] \
+  [get_bd_pins etm_decoder_0/i_valid]
+  connect_bd_net -net byte_stream_compactor_1_o_data  [get_bd_pins byte_stream_compactor_1/o_data] \
+  [get_bd_pins stm_decoder_0/i_data]
+  connect_bd_net -net byte_stream_compactor_1_o_valid  [get_bd_pins byte_stream_compactor_1/o_valid] \
+  [get_bd_pins stm_decoder_0/i_valid]
+  connect_bd_net -net byte_stream_demux_0_o_data  [get_bd_pins byte_stream_demux_0/o_data] \
+  [get_bd_pins byte_stream_compactor_0/i_data] \
+  [get_bd_pins byte_stream_compactor_1/i_data]
+  connect_bd_net -net byte_stream_demux_0_o_keep0  [get_bd_pins byte_stream_demux_0/o_keep0] \
+  [get_bd_pins byte_stream_compactor_0/i_keep]
+  connect_bd_net -net byte_stream_demux_0_o_keeps  [get_bd_pins byte_stream_demux_0/o_keeps] \
+  [get_bd_pins byte_stream_compactor_1/i_keep]
+  connect_bd_net -net etm_decoder_0_o_address_reg_0_0  [get_bd_pins etm_decoder_0/o_address_reg_0_0] \
+  [get_bd_pins o_address_reg_0_0]
+  connect_bd_net -net etm_decoder_0_o_address_reg_0_1  [get_bd_pins etm_decoder_0/o_address_reg_0_1] \
+  [get_bd_pins o_address_reg_0_1]
+  connect_bd_net -net etm_decoder_0_o_address_reg_0_2  [get_bd_pins etm_decoder_0/o_address_reg_0_2] \
+  [get_bd_pins o_address_reg_0_2]
+  connect_bd_net -net etm_decoder_0_o_address_reg_0_3  [get_bd_pins etm_decoder_0/o_address_reg_0_3] \
+  [get_bd_pins o_address_reg_0_3]
+  connect_bd_net -net etm_decoder_0_o_atom_elements0  [get_bd_pins etm_decoder_0/o_atom_elements0] \
+  [get_bd_pins o_atom_elements0]
+  connect_bd_net -net etm_decoder_0_o_atom_elements1  [get_bd_pins etm_decoder_0/o_atom_elements1] \
+  [get_bd_pins o_atom_elements1]
+  connect_bd_net -net etm_decoder_0_o_atom_elements2  [get_bd_pins etm_decoder_0/o_atom_elements2] \
+  [get_bd_pins o_atom_elements2]
+  connect_bd_net -net etm_decoder_0_o_atom_elements3  [get_bd_pins etm_decoder_0/o_atom_elements3] \
+  [get_bd_pins o_atom_elements3]
+  connect_bd_net -net etm_decoder_0_o_atom_nb0  [get_bd_pins etm_decoder_0/o_atom_nb0] \
+  [get_bd_pins o_atom_nb0]
+  connect_bd_net -net etm_decoder_0_o_atom_nb1  [get_bd_pins etm_decoder_0/o_atom_nb1] \
+  [get_bd_pins o_atom_nb1]
+  connect_bd_net -net etm_decoder_0_o_atom_nb2  [get_bd_pins etm_decoder_0/o_atom_nb2] \
+  [get_bd_pins o_atom_nb2]
+  connect_bd_net -net etm_decoder_0_o_atom_nb3  [get_bd_pins etm_decoder_0/o_atom_nb3] \
+  [get_bd_pins o_atom_nb3]
+  connect_bd_net -net etm_decoder_0_o_atom_valid0  [get_bd_pins etm_decoder_0/o_atom_valid0] \
+  [get_bd_pins o_atom_valid0]
+  connect_bd_net -net etm_decoder_0_o_atom_valid1  [get_bd_pins etm_decoder_0/o_atom_valid1] \
+  [get_bd_pins o_atom_valid1]
+  connect_bd_net -net etm_decoder_0_o_atom_valid2  [get_bd_pins etm_decoder_0/o_atom_valid2] \
+  [get_bd_pins o_atom_valid2]
+  connect_bd_net -net etm_decoder_0_o_atom_valid3  [get_bd_pins etm_decoder_0/o_atom_valid3] \
+  [get_bd_pins o_atom_valid3]
+  connect_bd_net -net frame_deformatter_0_o_data  [get_bd_pins frame_deformatter_0/o_data] \
+  [get_bd_pins byte_stream_demux_0/i_data]
+  connect_bd_net -net frame_deformatter_0_o_ids  [get_bd_pins frame_deformatter_0/o_ids] \
+  [get_bd_pins byte_stream_demux_0/i_ids]
+  connect_bd_net -net frame_deformatter_0_o_keep  [get_bd_pins frame_deformatter_0/o_keep] \
+  [get_bd_pins byte_stream_demux_0/i_keep]
+  connect_bd_net -net frame_deformatter_0_o_valid  [get_bd_pins frame_deformatter_0/o_valid] \
+  [get_bd_pins byte_stream_demux_0/i_valid]
+  connect_bd_net -net frame_generator_0_o_frame  [get_bd_pins frame_generator_0/o_frame] \
+  [get_bd_pins frame_deformatter_0/i_frame]
+  connect_bd_net -net frame_generator_0_o_valid_frame  [get_bd_pins frame_generator_0/o_valid_frame] \
+  [get_bd_pins frame_deformatter_0/i_valid_frame]
+  connect_bd_net -net i_data_1  [get_bd_pins i_data] \
+  [get_bd_pins frame_generator_0/i_data]
+
+  # Restore current instance
+  current_bd_instance $oldCurInst
+}
 
 
 # Procedure to create entire design; Provide argument to make
@@ -1347,86 +1566,9 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
   ] $zynq_ultra_ps_pl
 
 
-  # Create instance: frame_generator_0, and set properties
-  set block_name frame_generator
-  set block_cell_name frame_generator_0
-  if { [catch {set frame_generator_0 [create_bd_cell -type module -reference $block_name $block_cell_name] } errmsg] } {
-     catch {common::send_gid_msg -ssname BD::TCL -id 2095 -severity "ERROR" "Unable to add referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
-     return 1
-   } elseif { $frame_generator_0 eq "" } {
-     catch {common::send_gid_msg -ssname BD::TCL -id 2096 -severity "ERROR" "Unable to referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
-     return 1
-   }
-  
   # Create instance: proc_sys_reset_0, and set properties
   set proc_sys_reset_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:proc_sys_reset:5.0 proc_sys_reset_0 ]
 
-  # Create instance: frame_deformatter_0, and set properties
-  set block_name frame_deformatter
-  set block_cell_name frame_deformatter_0
-  if { [catch {set frame_deformatter_0 [create_bd_cell -type module -reference $block_name $block_cell_name] } errmsg] } {
-     catch {common::send_gid_msg -ssname BD::TCL -id 2095 -severity "ERROR" "Unable to add referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
-     return 1
-   } elseif { $frame_deformatter_0 eq "" } {
-     catch {common::send_gid_msg -ssname BD::TCL -id 2096 -severity "ERROR" "Unable to referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
-     return 1
-   }
-  
-  # Create instance: byte_stream_demux_0, and set properties
-  set block_name byte_stream_demux
-  set block_cell_name byte_stream_demux_0
-  if { [catch {set byte_stream_demux_0 [create_bd_cell -type module -reference $block_name $block_cell_name] } errmsg] } {
-     catch {common::send_gid_msg -ssname BD::TCL -id 2095 -severity "ERROR" "Unable to add referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
-     return 1
-   } elseif { $byte_stream_demux_0 eq "" } {
-     catch {common::send_gid_msg -ssname BD::TCL -id 2096 -severity "ERROR" "Unable to referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
-     return 1
-   }
-  
-  # Create instance: byte_stream_compactor_0, and set properties
-  set block_name byte_stream_compactor
-  set block_cell_name byte_stream_compactor_0
-  if { [catch {set byte_stream_compactor_0 [create_bd_cell -type module -reference $block_name $block_cell_name] } errmsg] } {
-     catch {common::send_gid_msg -ssname BD::TCL -id 2095 -severity "ERROR" "Unable to add referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
-     return 1
-   } elseif { $byte_stream_compactor_0 eq "" } {
-     catch {common::send_gid_msg -ssname BD::TCL -id 2096 -severity "ERROR" "Unable to referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
-     return 1
-   }
-  
-  # Create instance: etm_decoder_0, and set properties
-  set block_name etm_decoder
-  set block_cell_name etm_decoder_0
-  if { [catch {set etm_decoder_0 [create_bd_cell -type module -reference $block_name $block_cell_name] } errmsg] } {
-     catch {common::send_gid_msg -ssname BD::TCL -id 2095 -severity "ERROR" "Unable to add referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
-     return 1
-   } elseif { $etm_decoder_0 eq "" } {
-     catch {common::send_gid_msg -ssname BD::TCL -id 2096 -severity "ERROR" "Unable to referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
-     return 1
-   }
-  
-  # Create instance: byte_stream_compactor_1, and set properties
-  set block_name byte_stream_compactor
-  set block_cell_name byte_stream_compactor_1
-  if { [catch {set byte_stream_compactor_1 [create_bd_cell -type module -reference $block_name $block_cell_name] } errmsg] } {
-     catch {common::send_gid_msg -ssname BD::TCL -id 2095 -severity "ERROR" "Unable to add referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
-     return 1
-   } elseif { $byte_stream_compactor_1 eq "" } {
-     catch {common::send_gid_msg -ssname BD::TCL -id 2096 -severity "ERROR" "Unable to referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
-     return 1
-   }
-  
-  # Create instance: stm_decoder_0, and set properties
-  set block_name stm_decoder
-  set block_cell_name stm_decoder_0
-  if { [catch {set stm_decoder_0 [create_bd_cell -type module -reference $block_name $block_cell_name] } errmsg] } {
-     catch {common::send_gid_msg -ssname BD::TCL -id 2095 -severity "ERROR" "Unable to add referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
-     return 1
-   } elseif { $stm_decoder_0 eq "" } {
-     catch {common::send_gid_msg -ssname BD::TCL -id 2096 -severity "ERROR" "Unable to referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
-     return 1
-   }
-  
   # Create instance: decoder_stats_lut_0, and set properties
   set block_name decoder_stats_lut
   set block_cell_name decoder_stats_lut_0
@@ -1445,17 +1587,6 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
      catch {common::send_gid_msg -ssname BD::TCL -id 2095 -severity "ERROR" "Unable to add referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
      return 1
    } elseif { $edge_extractor_0 eq "" } {
-     catch {common::send_gid_msg -ssname BD::TCL -id 2096 -severity "ERROR" "Unable to referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
-     return 1
-   }
-  
-  # Create instance: bitmap_writer_0, and set properties
-  set block_name bitmap_writer
-  set block_cell_name bitmap_writer_0
-  if { [catch {set bitmap_writer_0 [create_bd_cell -type module -reference $block_name $block_cell_name] } errmsg] } {
-     catch {common::send_gid_msg -ssname BD::TCL -id 2095 -severity "ERROR" "Unable to add referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
-     return 1
-   } elseif { $bitmap_writer_0 eq "" } {
      catch {common::send_gid_msg -ssname BD::TCL -id 2096 -severity "ERROR" "Unable to referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
      return 1
    }
@@ -1489,147 +1620,158 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
   ] $axi_smc_1
 
 
+  # Create instance: bitmap_writer_bram_0, and set properties
+  set block_name bitmap_writer_bram
+  set block_cell_name bitmap_writer_bram_0
+  if { [catch {set bitmap_writer_bram_0 [create_bd_cell -type module -reference $block_name $block_cell_name] } errmsg] } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2095 -severity "ERROR" "Unable to add referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
+     return 1
+   } elseif { $bitmap_writer_bram_0 eq "" } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2096 -severity "ERROR" "Unable to referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
+     return 1
+   }
+  
+  # Create instance: bitmap_reader_bram_0, and set properties
+  set block_name bitmap_reader_bram
+  set block_cell_name bitmap_reader_bram_0
+  if { [catch {set bitmap_reader_bram_0 [create_bd_cell -type module -reference $block_name $block_cell_name] } errmsg] } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2095 -severity "ERROR" "Unable to add referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
+     return 1
+   } elseif { $bitmap_reader_bram_0 eq "" } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2096 -severity "ERROR" "Unable to referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
+     return 1
+   }
+  
+  # Create instance: blk_mem_gen_0, and set properties
+  set blk_mem_gen_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:blk_mem_gen:8.4 blk_mem_gen_0 ]
+  set_property -dict [list \
+    CONFIG.Memory_Type {True_Dual_Port_RAM} \
+    CONFIG.Operating_Mode_A {READ_FIRST} \
+    CONFIG.Operating_Mode_B {READ_FIRST} \
+    CONFIG.Register_PortA_Output_of_Memory_Primitives {false} \
+    CONFIG.Register_PortB_Output_of_Memory_Primitives {false} \
+    CONFIG.Write_Depth_A {65536} \
+    CONFIG.Write_Width_A {8} \
+    CONFIG.Write_Width_B {32} \
+    CONFIG.use_bram_block {Stand_Alone} \
+  ] $blk_mem_gen_0
+
+
+  # Create instance: decoder
+  create_hier_cell_decoder [current_bd_instance .] decoder
+
   # Create interface connections
   connect_bd_intf_net -intf_net axi_dma_0_M_AXI_S2MM [get_bd_intf_pins axi_dma_0/M_AXI_S2MM] [get_bd_intf_pins axi_smc_1/S00_AXI]
   connect_bd_intf_net -intf_net axi_smc_1_M00_AXI [get_bd_intf_pins axi_smc_1/M00_AXI] [get_bd_intf_pins zynq_ultra_ps_pl/S_AXI_HP0_FPD]
   connect_bd_intf_net -intf_net axi_smc_M00_AXI [get_bd_intf_pins axi_smc/M00_AXI] [get_bd_intf_pins axi_dma_0/S_AXI_LITE]
-  connect_bd_intf_net -intf_net axi_smc_M01_AXI [get_bd_intf_pins axi_smc/M01_AXI] [get_bd_intf_pins bitmap_writer_0/s_axi]
+  connect_bd_intf_net -intf_net axi_smc_M01_AXI [get_bd_intf_pins axi_smc/M01_AXI] [get_bd_intf_pins bitmap_reader_bram_0/s_axi]
   connect_bd_intf_net -intf_net axi_smc_M02_AXI [get_bd_intf_pins axi_smc/M02_AXI] [get_bd_intf_pins decoder_stats_lut_0/s_axi]
-  connect_bd_intf_net -intf_net bitmap_writer_0_m_axis [get_bd_intf_pins bitmap_writer_0/m_axis] [get_bd_intf_pins axi_dma_0/S_AXIS_S2MM]
+  connect_bd_intf_net -intf_net bitmap_reader_bram_0_m_axis [get_bd_intf_pins bitmap_reader_bram_0/m_axis] [get_bd_intf_pins axi_dma_0/S_AXIS_S2MM]
   connect_bd_intf_net -intf_net zynq_ultra_ps_pl_M_AXI_HPM0_LPD [get_bd_intf_pins zynq_ultra_ps_pl/M_AXI_HPM0_LPD] [get_bd_intf_pins axi_smc/S00_AXI]
 
   # Create port connections
-  connect_bd_net -net bitmap_writer_0_o_fifo_ready  [get_bd_pins bitmap_writer_0/o_fifo_ready] \
+  connect_bd_net -net bitmap_reader_bram_0_bram_addr  [get_bd_pins bitmap_reader_bram_0/bram_addr] \
+  [get_bd_pins blk_mem_gen_0/addrb]
+  connect_bd_net -net bitmap_reader_bram_0_bram_din  [get_bd_pins bitmap_reader_bram_0/bram_din] \
+  [get_bd_pins blk_mem_gen_0/dinb]
+  connect_bd_net -net bitmap_reader_bram_0_bram_en  [get_bd_pins bitmap_reader_bram_0/bram_en] \
+  [get_bd_pins blk_mem_gen_0/enb]
+  connect_bd_net -net bitmap_reader_bram_0_bram_we  [get_bd_pins bitmap_reader_bram_0/bram_we] \
+  [get_bd_pins blk_mem_gen_0/web]
+  connect_bd_net -net bitmap_reader_bram_0_o_fifo_freeze_req  [get_bd_pins bitmap_reader_bram_0/o_fifo_freeze_req] \
+  [get_bd_pins bitmap_writer_bram_0/i_fifo_freeze_req]
+  connect_bd_net -net bitmap_writer_bram_0_bram_addr  [get_bd_pins bitmap_writer_bram_0/bram_addr] \
+  [get_bd_pins blk_mem_gen_0/addra]
+  connect_bd_net -net bitmap_writer_bram_0_bram_din  [get_bd_pins bitmap_writer_bram_0/bram_din] \
+  [get_bd_pins blk_mem_gen_0/dina]
+  connect_bd_net -net bitmap_writer_bram_0_bram_en  [get_bd_pins bitmap_writer_bram_0/bram_en] \
+  [get_bd_pins blk_mem_gen_0/ena]
+  connect_bd_net -net bitmap_writer_bram_0_bram_we  [get_bd_pins bitmap_writer_bram_0/bram_we] \
+  [get_bd_pins blk_mem_gen_0/wea]
+  connect_bd_net -net bitmap_writer_bram_0_o_fifo_ready  [get_bd_pins bitmap_writer_bram_0/o_fifo_ready] \
   [get_bd_pins edge_extractor_0/i_ready]
-  connect_bd_net -net byte_stream_compactor_0_o_data  [get_bd_pins byte_stream_compactor_0/o_data] \
-  [get_bd_pins etm_decoder_0/i_data]
-  connect_bd_net -net byte_stream_compactor_0_o_valid  [get_bd_pins byte_stream_compactor_0/o_valid] \
-  [get_bd_pins etm_decoder_0/i_valid]
-  connect_bd_net -net byte_stream_compactor_1_o_data  [get_bd_pins byte_stream_compactor_1/o_data] \
-  [get_bd_pins stm_decoder_0/i_data]
-  connect_bd_net -net byte_stream_compactor_1_o_valid  [get_bd_pins byte_stream_compactor_1/o_valid] \
-  [get_bd_pins stm_decoder_0/i_valid]
-  connect_bd_net -net byte_stream_demux_0_o_data  [get_bd_pins byte_stream_demux_0/o_data] \
-  [get_bd_pins byte_stream_compactor_0/i_data] \
-  [get_bd_pins byte_stream_compactor_1/i_data]
-  connect_bd_net -net byte_stream_demux_0_o_keep0  [get_bd_pins byte_stream_demux_0/o_keep0] \
-  [get_bd_pins byte_stream_compactor_0/i_keep]
-  connect_bd_net -net byte_stream_demux_0_o_keeps  [get_bd_pins byte_stream_demux_0/o_keeps] \
-  [get_bd_pins byte_stream_compactor_1/i_keep]
-  connect_bd_net -net decoder_stats_lut_0_o_address_reg_0_0  [get_bd_pins decoder_stats_lut_0/o_address_reg_0_0] \
-  [get_bd_pins edge_extractor_0/i_address_reg_0_0]
-  connect_bd_net -net decoder_stats_lut_0_o_address_reg_0_1  [get_bd_pins decoder_stats_lut_0/o_address_reg_0_1] \
-  [get_bd_pins edge_extractor_0/i_address_reg_0_1]
-  connect_bd_net -net decoder_stats_lut_0_o_address_reg_0_2  [get_bd_pins decoder_stats_lut_0/o_address_reg_0_2] \
-  [get_bd_pins edge_extractor_0/i_address_reg_0_2]
-  connect_bd_net -net decoder_stats_lut_0_o_address_reg_0_3  [get_bd_pins decoder_stats_lut_0/o_address_reg_0_3] \
-  [get_bd_pins edge_extractor_0/i_address_reg_0_3]
-  connect_bd_net -net decoder_stats_lut_0_o_atom_elements0  [get_bd_pins decoder_stats_lut_0/o_atom_elements0] \
-  [get_bd_pins edge_extractor_0/i_atom_elements0]
-  connect_bd_net -net decoder_stats_lut_0_o_atom_elements1  [get_bd_pins decoder_stats_lut_0/o_atom_elements1] \
-  [get_bd_pins edge_extractor_0/i_atom_elements1]
-  connect_bd_net -net decoder_stats_lut_0_o_atom_elements2  [get_bd_pins decoder_stats_lut_0/o_atom_elements2] \
-  [get_bd_pins edge_extractor_0/i_atom_elements2]
-  connect_bd_net -net decoder_stats_lut_0_o_atom_elements3  [get_bd_pins decoder_stats_lut_0/o_atom_elements3] \
-  [get_bd_pins edge_extractor_0/i_atom_elements3]
-  connect_bd_net -net decoder_stats_lut_0_o_atom_nb0  [get_bd_pins decoder_stats_lut_0/o_atom_nb0] \
-  [get_bd_pins edge_extractor_0/i_atom_nb0]
-  connect_bd_net -net decoder_stats_lut_0_o_atom_nb1  [get_bd_pins decoder_stats_lut_0/o_atom_nb1] \
-  [get_bd_pins edge_extractor_0/i_atom_nb1]
-  connect_bd_net -net decoder_stats_lut_0_o_atom_nb2  [get_bd_pins decoder_stats_lut_0/o_atom_nb2] \
-  [get_bd_pins edge_extractor_0/i_atom_nb2]
-  connect_bd_net -net decoder_stats_lut_0_o_atom_nb3  [get_bd_pins decoder_stats_lut_0/o_atom_nb3] \
-  [get_bd_pins edge_extractor_0/i_atom_nb3]
-  connect_bd_net -net decoder_stats_lut_0_o_atom_valid0  [get_bd_pins decoder_stats_lut_0/o_atom_valid0] \
-  [get_bd_pins edge_extractor_0/i_atom_valid0]
-  connect_bd_net -net decoder_stats_lut_0_o_atom_valid1  [get_bd_pins decoder_stats_lut_0/o_atom_valid1] \
-  [get_bd_pins edge_extractor_0/i_atom_valid1]
-  connect_bd_net -net decoder_stats_lut_0_o_atom_valid2  [get_bd_pins decoder_stats_lut_0/o_atom_valid2] \
-  [get_bd_pins edge_extractor_0/i_atom_valid2]
-  connect_bd_net -net decoder_stats_lut_0_o_atom_valid3  [get_bd_pins decoder_stats_lut_0/o_atom_valid3] \
-  [get_bd_pins edge_extractor_0/i_atom_valid3]
-  connect_bd_net -net edge_extractor_0_o_empty  [get_bd_pins edge_extractor_0/o_empty] \
-  [get_bd_pins bitmap_writer_0/i_fifo_empty]
-  connect_bd_net -net edge_extractor_0_o_index  [get_bd_pins edge_extractor_0/o_index] \
-  [get_bd_pins bitmap_writer_0/i_fifo_index]
-  connect_bd_net -net edge_extractor_0_o_valid  [get_bd_pins edge_extractor_0/o_valid] \
-  [get_bd_pins bitmap_writer_0/i_fifo_valid]
-  connect_bd_net -net etm_decoder_0_o_address_reg_0_0  [get_bd_pins etm_decoder_0/o_address_reg_0_0] \
+  connect_bd_net -net blk_mem_gen_0_douta  [get_bd_pins blk_mem_gen_0/douta] \
+  [get_bd_pins bitmap_writer_bram_0/bram_dout]
+  connect_bd_net -net blk_mem_gen_0_doutb  [get_bd_pins blk_mem_gen_0/doutb] \
+  [get_bd_pins bitmap_reader_bram_0/bram_dout]
+  connect_bd_net -net decoder_o_address_reg_0_0  [get_bd_pins decoder/o_address_reg_0_0] \
+  [get_bd_pins edge_extractor_0/i_address_reg_0_0] \
   [get_bd_pins decoder_stats_lut_0/i_address_reg_0_0]
-  connect_bd_net -net etm_decoder_0_o_address_reg_0_1  [get_bd_pins etm_decoder_0/o_address_reg_0_1] \
+  connect_bd_net -net decoder_o_address_reg_0_1  [get_bd_pins decoder/o_address_reg_0_1] \
+  [get_bd_pins edge_extractor_0/i_address_reg_0_1] \
   [get_bd_pins decoder_stats_lut_0/i_address_reg_0_1]
-  connect_bd_net -net etm_decoder_0_o_address_reg_0_2  [get_bd_pins etm_decoder_0/o_address_reg_0_2] \
+  connect_bd_net -net decoder_o_address_reg_0_2  [get_bd_pins decoder/o_address_reg_0_2] \
+  [get_bd_pins edge_extractor_0/i_address_reg_0_2] \
   [get_bd_pins decoder_stats_lut_0/i_address_reg_0_2]
-  connect_bd_net -net etm_decoder_0_o_address_reg_0_3  [get_bd_pins etm_decoder_0/o_address_reg_0_3] \
+  connect_bd_net -net decoder_o_address_reg_0_3  [get_bd_pins decoder/o_address_reg_0_3] \
+  [get_bd_pins edge_extractor_0/i_address_reg_0_3] \
   [get_bd_pins decoder_stats_lut_0/i_address_reg_0_3]
-  connect_bd_net -net etm_decoder_0_o_atom_elements0  [get_bd_pins etm_decoder_0/o_atom_elements0] \
+  connect_bd_net -net decoder_o_atom_elements0  [get_bd_pins decoder/o_atom_elements0] \
+  [get_bd_pins edge_extractor_0/i_atom_elements0] \
   [get_bd_pins decoder_stats_lut_0/i_atom_elements0]
-  connect_bd_net -net etm_decoder_0_o_atom_elements1  [get_bd_pins etm_decoder_0/o_atom_elements1] \
+  connect_bd_net -net decoder_o_atom_elements1  [get_bd_pins decoder/o_atom_elements1] \
+  [get_bd_pins edge_extractor_0/i_atom_elements1] \
   [get_bd_pins decoder_stats_lut_0/i_atom_elements1]
-  connect_bd_net -net etm_decoder_0_o_atom_elements2  [get_bd_pins etm_decoder_0/o_atom_elements2] \
+  connect_bd_net -net decoder_o_atom_elements2  [get_bd_pins decoder/o_atom_elements2] \
+  [get_bd_pins edge_extractor_0/i_atom_elements2] \
   [get_bd_pins decoder_stats_lut_0/i_atom_elements2]
-  connect_bd_net -net etm_decoder_0_o_atom_elements3  [get_bd_pins etm_decoder_0/o_atom_elements3] \
+  connect_bd_net -net decoder_o_atom_elements3  [get_bd_pins decoder/o_atom_elements3] \
+  [get_bd_pins edge_extractor_0/i_atom_elements3] \
   [get_bd_pins decoder_stats_lut_0/i_atom_elements3]
-  connect_bd_net -net etm_decoder_0_o_atom_nb0  [get_bd_pins etm_decoder_0/o_atom_nb0] \
+  connect_bd_net -net decoder_o_atom_nb0  [get_bd_pins decoder/o_atom_nb0] \
+  [get_bd_pins edge_extractor_0/i_atom_nb0] \
   [get_bd_pins decoder_stats_lut_0/i_atom_nb0]
-  connect_bd_net -net etm_decoder_0_o_atom_nb1  [get_bd_pins etm_decoder_0/o_atom_nb1] \
+  connect_bd_net -net decoder_o_atom_nb1  [get_bd_pins decoder/o_atom_nb1] \
+  [get_bd_pins edge_extractor_0/i_atom_nb1] \
   [get_bd_pins decoder_stats_lut_0/i_atom_nb1]
-  connect_bd_net -net etm_decoder_0_o_atom_nb2  [get_bd_pins etm_decoder_0/o_atom_nb2] \
+  connect_bd_net -net decoder_o_atom_nb2  [get_bd_pins decoder/o_atom_nb2] \
+  [get_bd_pins edge_extractor_0/i_atom_nb2] \
   [get_bd_pins decoder_stats_lut_0/i_atom_nb2]
-  connect_bd_net -net etm_decoder_0_o_atom_nb3  [get_bd_pins etm_decoder_0/o_atom_nb3] \
+  connect_bd_net -net decoder_o_atom_nb3  [get_bd_pins decoder/o_atom_nb3] \
+  [get_bd_pins edge_extractor_0/i_atom_nb3] \
   [get_bd_pins decoder_stats_lut_0/i_atom_nb3]
-  connect_bd_net -net etm_decoder_0_o_atom_valid0  [get_bd_pins etm_decoder_0/o_atom_valid0] \
+  connect_bd_net -net decoder_o_atom_valid0  [get_bd_pins decoder/o_atom_valid0] \
+  [get_bd_pins edge_extractor_0/i_atom_valid0] \
   [get_bd_pins decoder_stats_lut_0/i_atom_valid0]
-  connect_bd_net -net etm_decoder_0_o_atom_valid1  [get_bd_pins etm_decoder_0/o_atom_valid1] \
+  connect_bd_net -net decoder_o_atom_valid1  [get_bd_pins decoder/o_atom_valid1] \
+  [get_bd_pins edge_extractor_0/i_atom_valid1] \
   [get_bd_pins decoder_stats_lut_0/i_atom_valid1]
-  connect_bd_net -net etm_decoder_0_o_atom_valid2  [get_bd_pins etm_decoder_0/o_atom_valid2] \
+  connect_bd_net -net decoder_o_atom_valid2  [get_bd_pins decoder/o_atom_valid2] \
+  [get_bd_pins edge_extractor_0/i_atom_valid2] \
   [get_bd_pins decoder_stats_lut_0/i_atom_valid2]
-  connect_bd_net -net etm_decoder_0_o_atom_valid3  [get_bd_pins etm_decoder_0/o_atom_valid3] \
+  connect_bd_net -net decoder_o_atom_valid3  [get_bd_pins decoder/o_atom_valid3] \
+  [get_bd_pins edge_extractor_0/i_atom_valid3] \
   [get_bd_pins decoder_stats_lut_0/i_atom_valid3]
-  connect_bd_net -net frame_deformatter_0_o_data  [get_bd_pins frame_deformatter_0/o_data] \
-  [get_bd_pins byte_stream_demux_0/i_data]
-  connect_bd_net -net frame_deformatter_0_o_ids  [get_bd_pins frame_deformatter_0/o_ids] \
-  [get_bd_pins byte_stream_demux_0/i_ids]
-  connect_bd_net -net frame_deformatter_0_o_keep  [get_bd_pins frame_deformatter_0/o_keep] \
-  [get_bd_pins byte_stream_demux_0/i_keep]
-  connect_bd_net -net frame_deformatter_0_o_valid  [get_bd_pins frame_deformatter_0/o_valid] \
-  [get_bd_pins byte_stream_demux_0/i_valid]
-  connect_bd_net -net frame_generator_0_o_frame  [get_bd_pins frame_generator_0/o_frame] \
-  [get_bd_pins frame_deformatter_0/i_frame]
-  connect_bd_net -net frame_generator_0_o_valid_frame  [get_bd_pins frame_generator_0/o_valid_frame] \
-  [get_bd_pins frame_deformatter_0/i_valid_frame]
+  connect_bd_net -net edge_extractor_0_o_empty  [get_bd_pins edge_extractor_0/o_empty] \
+  [get_bd_pins bitmap_reader_bram_0/i_fifo_empty]
+  connect_bd_net -net edge_extractor_0_o_index  [get_bd_pins edge_extractor_0/o_index] \
+  [get_bd_pins bitmap_writer_bram_0/i_fifo_index]
+  connect_bd_net -net edge_extractor_0_o_valid  [get_bd_pins edge_extractor_0/o_valid] \
+  [get_bd_pins bitmap_writer_bram_0/i_fifo_valid]
   connect_bd_net -net proc_sys_reset_0_peripheral_aresetn  [get_bd_pins proc_sys_reset_0/peripheral_aresetn] \
-  [get_bd_pins frame_generator_0/aresetn] \
-  [get_bd_pins frame_deformatter_0/aresetn] \
-  [get_bd_pins byte_stream_demux_0/aresetn] \
-  [get_bd_pins byte_stream_compactor_0/aresetn] \
-  [get_bd_pins etm_decoder_0/aresetn] \
-  [get_bd_pins byte_stream_compactor_1/aresetn] \
-  [get_bd_pins stm_decoder_0/aresetn] \
-  [get_bd_pins decoder_stats_lut_0/aresetn] \
-  [get_bd_pins bitmap_writer_0/aresetn] \
   [get_bd_pins axi_dma_0/axi_resetn] \
   [get_bd_pins axi_smc_1/aresetn] \
-  [get_bd_pins edge_extractor_0/aresetn]
+  [get_bd_pins edge_extractor_0/aresetn] \
+  [get_bd_pins bitmap_reader_bram_0/aresetn] \
+  [get_bd_pins bitmap_writer_bram_0/aresetn] \
+  [get_bd_pins decoder/aresetn] \
+  [get_bd_pins decoder_stats_lut_0/aresetn]
   connect_bd_net -net rst_zynq_ultra_ps_pl_250M_peripheral_aresetn  [get_bd_pins rst_zynq_ultra_ps_pl_250M/peripheral_aresetn] \
   [get_bd_pins axi_smc/aresetn]
   connect_bd_net -net zynq_ultra_ps_pl_pl_clk0  [get_bd_pins zynq_ultra_ps_pl/pl_clk0] \
   [get_bd_pins zynq_ultra_ps_pl/pl_ps_trace_clk] \
   [get_bd_pins proc_sys_reset_0/slowest_sync_clk] \
-  [get_bd_pins frame_generator_0/aclk] \
-  [get_bd_pins frame_deformatter_0/aclk] \
-  [get_bd_pins byte_stream_demux_0/aclk] \
-  [get_bd_pins byte_stream_compactor_0/aclk] \
-  [get_bd_pins etm_decoder_0/aclk] \
-  [get_bd_pins byte_stream_compactor_1/aclk] \
-  [get_bd_pins stm_decoder_0/aclk] \
-  [get_bd_pins decoder_stats_lut_0/aclk] \
-  [get_bd_pins bitmap_writer_0/aclk] \
   [get_bd_pins axi_dma_0/s_axi_lite_aclk] \
   [get_bd_pins axi_dma_0/m_axi_s2mm_aclk] \
   [get_bd_pins axi_smc/aclk1] \
   [get_bd_pins axi_smc_1/aclk] \
-  [get_bd_pins edge_extractor_0/aclk]
+  [get_bd_pins edge_extractor_0/aclk] \
+  [get_bd_pins blk_mem_gen_0/clka] \
+  [get_bd_pins blk_mem_gen_0/clkb] \
+  [get_bd_pins bitmap_reader_bram_0/aclk] \
+  [get_bd_pins bitmap_writer_bram_0/aclk] \
+  [get_bd_pins decoder/aclk] \
+  [get_bd_pins decoder_stats_lut_0/aclk]
   connect_bd_net -net zynq_ultra_ps_pl_pl_clk1  [get_bd_pins zynq_ultra_ps_pl/pl_clk1] \
   [get_bd_pins zynq_ultra_ps_pl/saxihp0_fpd_aclk] \
   [get_bd_pins zynq_ultra_ps_pl/maxihpm0_lpd_aclk] \
@@ -1641,11 +1783,11 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
   connect_bd_net -net zynq_ultra_ps_pl_pl_resetn1  [get_bd_pins zynq_ultra_ps_pl/pl_resetn1] \
   [get_bd_pins rst_zynq_ultra_ps_pl_250M/ext_reset_in]
   connect_bd_net -net zynq_ultra_ps_pl_ps_pl_tracedata  [get_bd_pins zynq_ultra_ps_pl/ps_pl_tracedata] \
-  [get_bd_pins frame_generator_0/i_data]
+  [get_bd_pins decoder/i_data]
 
   # Create address segments
   assign_bd_address -offset 0x80000000 -range 0x00010000 -target_address_space [get_bd_addr_spaces zynq_ultra_ps_pl/Data] [get_bd_addr_segs axi_dma_0/S_AXI_LITE/Reg] -force
-  assign_bd_address -offset 0x80010000 -range 0x00010000 -target_address_space [get_bd_addr_spaces zynq_ultra_ps_pl/Data] [get_bd_addr_segs bitmap_writer_0/s_axi/reg0] -force
+  assign_bd_address -offset 0x80010000 -range 0x00010000 -target_address_space [get_bd_addr_spaces zynq_ultra_ps_pl/Data] [get_bd_addr_segs bitmap_reader_bram_0/s_axi/reg0] -force
   assign_bd_address -offset 0x80020000 -range 0x00001000 -target_address_space [get_bd_addr_spaces zynq_ultra_ps_pl/Data] [get_bd_addr_segs decoder_stats_lut_0/s_axi/reg0] -force
   assign_bd_address -offset 0x00000000 -range 0x80000000 -target_address_space [get_bd_addr_spaces axi_dma_0/Data_S2MM] [get_bd_addr_segs zynq_ultra_ps_pl/SAXIGP2/HP0_DDR_LOW] -force
   assign_bd_address -offset 0xC0000000 -range 0x20000000 -target_address_space [get_bd_addr_spaces axi_dma_0/Data_S2MM] [get_bd_addr_segs zynq_ultra_ps_pl/SAXIGP2/HP0_QSPI] -force
