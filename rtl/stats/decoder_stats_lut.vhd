@@ -526,12 +526,14 @@ begin
         variable v_min_atom_gap_length   : unsigned(COUNTER_W-1 downto 0);
         variable v_sum_atom_gaps         : unsigned(COUNTER_W-1 downto 0);
 
-        -- Cross-cycle
-        variable v_atom_burst_length          : unsigned(COUNTER_W-1 downto 0);
-        variable v_atom_gap_length            : unsigned(COUNTER_W-1 downto 0);
-        variable v_atom_burst_length_resolved : unsigned(COUNTER_W-1 downto 0);
-        variable v_atom_gap_length_resolved   : unsigned(COUNTER_W-1 downto 0);
+        variable v_atom_burst_length     : unsigned(COUNTER_W-1 downto 0);
+        variable v_atom_gap_length       : unsigned(COUNTER_W-1 downto 0);
 
+        -- Priority mux outputs
+        variable v_new_burst_length      : unsigned(COUNTER_W-1 downto 0);
+        variable v_burst_event           : std_logic;
+        variable v_new_gap_length        : unsigned(COUNTER_W-1 downto 0);
+        variable v_gap_event             : std_logic;
     begin
         if rising_edge(aclk) then
             if aresetn = '0' or stats_reset = '1' then
@@ -551,7 +553,6 @@ begin
                 atom_gap_length         <= (others=>'0');
                 prev_atom_valid         <= 0;
 
-                -- Variables
                 v_atom_burst_count      := (others=>'0');
                 v_atom_burst_length     := (others=>'0');
                 v_min_atom_burst_length := (others=>'0');
@@ -574,11 +575,11 @@ begin
                 v_min_atom_burst_length := min_atom_burst_length;
                 v_sum_atom_bursts       := sum_atom_bursts;
 
-                v_atom_gap_count       := atom_gap_count;
-                v_atom_gap_length      := atom_gap_length;
-                v_max_atom_gap_length  := max_atom_gap_length;
-                v_min_atom_gap_length  := min_atom_gap_length;
-                v_sum_atom_gaps        := sum_atom_gaps;
+                v_atom_gap_count        := atom_gap_count;
+                v_atom_gap_length       := atom_gap_length;
+                v_max_atom_gap_length   := max_atom_gap_length;
+                v_min_atom_gap_length   := min_atom_gap_length;
+                v_sum_atom_gaps         := sum_atom_gaps;
 
                 -- LUT lookup
                 lut_entry := atom_lut(
@@ -587,137 +588,90 @@ begin
                 );
 
                 ----------------------------------------------------------------
-                -- Handle previous-crossing segments
+                -- Resolve burst event (mutually exclusive priority)
+                -- previous_burst_ended: carry-over burst ends before this group
+                -- bursts_ended:         carry-over burst ends inside this group
+                -- inner_bursts:         self-contained burst, no carry-over
                 ----------------------------------------------------------------
-                -- Case:
-                -- previous cycle: atom_valid3 = 1
-                -- this cycle:     atom_valid0 = 0
-                --  -> update burst info
                 if lut_entry.previous_burst_ended = '1' then
-                    v_atom_burst_count := v_atom_burst_count + 1;
-                    v_sum_atom_bursts  := v_sum_atom_bursts + v_atom_burst_length;
-
-                    -- Check min/max
-                    if v_atom_burst_length > v_max_atom_burst_length then
-                        v_max_atom_burst_length := v_atom_burst_length;
-                    end if;
-
-                    if v_atom_burst_length < v_min_atom_burst_length or v_min_atom_burst_length = 0 then
-                        v_min_atom_burst_length := v_atom_burst_length;
-                    end if;
-
-                    -- Reset ongoing length
-                    v_atom_burst_length := (others => '0');
+                    v_new_burst_length := v_atom_burst_length;
+                    v_burst_event      := '1';
+                elsif lut_entry.bursts_ended /= 0 then
+                    v_new_burst_length := v_atom_burst_length + resize(lut_entry.bursts_ended, COUNTER_W);
+                    v_burst_event      := '1';
+                else
+                    v_new_burst_length := (others => '0');
+                    v_burst_event      := '0';
                 end if;
 
-                -- Case:
-                -- previous cycle: atom_valid3 = 0
-                -- this cycle:     atom_valid0 = 1
-                -- -> update gap info
-                if lut_entry.previous_gap_ended = '1' then
-                    v_atom_gap_count := v_atom_gap_count + 1;
-                    v_sum_atom_gaps  := v_sum_atom_gaps + v_atom_gap_length;
-
-                    -- Check min/max
-                    if v_atom_gap_length > v_max_atom_gap_length then
-                        v_max_atom_gap_length := v_atom_gap_length;
-                    end if;
-
-                    if v_atom_gap_length < v_min_atom_gap_length or v_min_atom_gap_length = 0 then
-                        v_min_atom_gap_length := v_atom_gap_length;
-                    end if;
-
-                    -- Reset ongoing length
-                    v_atom_gap_length := (others => '0');
-                end if;
-
-                ----------------------------------------------------------------
-                -- Handle leading segments
-                ----------------------------------------------------------------
-
-                -- A burst ends in these valids -> update burst info
-                if lut_entry.bursts_ended /= 0 then
-                    v_atom_burst_count := v_atom_burst_count + 1;
-
-                    -- Continuation from the previous cycle
-                    if lut_entry.previous_burst_ended = '0' then
-                        v_atom_burst_length_resolved := v_atom_burst_length + resize(lut_entry.bursts_ended, COUNTER_W);
-                    else -- Independent burst
-                        v_atom_burst_length_resolved := resize(lut_entry.bursts_ended, COUNTER_W);
-                    end if;
-                    v_sum_atom_bursts  := v_sum_atom_bursts + v_atom_burst_length_resolved;
-
-                    -- Check min/max
-                    if v_atom_burst_length_resolved > v_max_atom_burst_length then
-                        v_max_atom_burst_length := v_atom_burst_length_resolved;
-                    end if;
-
-                    if v_atom_burst_length_resolved < v_min_atom_burst_length or v_min_atom_burst_length = 0 then
-                        v_min_atom_burst_length := v_atom_burst_length_resolved;
-                    end if;
-
-                    -- Reset ongoing length
-                    v_atom_burst_length := (others => '0');
-                end if;
-
-                -- A gap ends in these valids -> update gap info
-                if lut_entry.gaps_ended /= 0 then
-                    v_atom_gap_count := v_atom_gap_count + 1;
-
-                    -- Continuation from the previous cycle
-                    if lut_entry.previous_gap_ended = '0' then
-                        v_atom_gap_length_resolved := v_atom_gap_length + resize(lut_entry.gaps_ended, COUNTER_W);
-                    else -- Independent gap
-                        v_atom_gap_length_resolved := resize(lut_entry.gaps_ended, COUNTER_W);
-                    end if;
-                    v_sum_atom_gaps  := v_sum_atom_gaps + v_atom_gap_length_resolved;
-
-                    -- Check min/max
-                    if v_atom_gap_length_resolved > v_max_atom_gap_length then
-                        v_max_atom_gap_length := v_atom_gap_length_resolved;
-                    end if;
-
-                    if v_atom_gap_length_resolved < v_min_atom_gap_length or v_min_atom_gap_length = 0 then
-                        v_min_atom_gap_length := v_atom_gap_length_resolved;
-                    end if;
-
-                    -- Reset ongoing length
-                    v_atom_gap_length := (others => '0');
-                end if;
-
-                ----------------------------------------------------------------
-                -- Handle inner segments
-                ----------------------------------------------------------------
-                -- Inner burst found -> update burst info
                 if lut_entry.inner_bursts /= 0 then
-                    v_atom_burst_count := v_atom_burst_count + 1;  -- one burst per inner segment
+                    v_atom_burst_count := v_atom_burst_count + 1;
                     v_sum_atom_bursts  := v_sum_atom_bursts + resize(lut_entry.inner_bursts, COUNTER_W);
 
-                    -- Check min/max
                     if resize(lut_entry.inner_bursts, COUNTER_W) > v_max_atom_burst_length then
                         v_max_atom_burst_length := resize(lut_entry.inner_bursts, COUNTER_W);
                     end if;
-
                     if resize(lut_entry.inner_bursts, COUNTER_W) < v_min_atom_burst_length or v_min_atom_burst_length = 0 then
                         v_min_atom_burst_length := resize(lut_entry.inner_bursts, COUNTER_W);
+                    end if;
+                end if;
+
+                ----------------------------------------------------------------
+                -- Resolve gap event (mutually exclusive priority)
+                ----------------------------------------------------------------
+                if lut_entry.previous_gap_ended = '1' then
+                    v_new_gap_length := v_atom_gap_length;
+                    v_gap_event      := '1';
+                elsif lut_entry.gaps_ended /= 0 then
+                    v_new_gap_length := v_atom_gap_length + resize(lut_entry.gaps_ended, COUNTER_W);
+                    v_gap_event      := '1';
+                else
+                    v_new_gap_length := (others => '0');
+                    v_gap_event      := '0';
+                end if;
+
+                if lut_entry.inner_gaps /= 0 then
+                    v_atom_gap_count := v_atom_gap_count + 1;
+                    v_sum_atom_gaps  := v_sum_atom_gaps + resize(lut_entry.inner_gaps, COUNTER_W);
+
+                    if resize(lut_entry.inner_gaps, COUNTER_W) > v_max_atom_gap_length then
+                        v_max_atom_gap_length := resize(lut_entry.inner_gaps, COUNTER_W);
+                    end if;
+                    if resize(lut_entry.inner_gaps, COUNTER_W) < v_min_atom_gap_length or v_min_atom_gap_length = 0 then
+                        v_min_atom_gap_length := resize(lut_entry.inner_gaps, COUNTER_W);
+                    end if;
+                end if;
+
+                ----------------------------------------------------------------
+                -- Update burst stats and reset accumulator
+                ----------------------------------------------------------------
+                if v_burst_event = '1' then
+                    v_atom_burst_count := v_atom_burst_count + 1;
+                    v_sum_atom_bursts  := v_sum_atom_bursts + v_new_burst_length;
+
+                    if v_new_burst_length > v_max_atom_burst_length then
+                        v_max_atom_burst_length := v_new_burst_length;
+                    end if;
+                    if v_new_burst_length < v_min_atom_burst_length or v_min_atom_burst_length = 0 then
+                        v_min_atom_burst_length := v_new_burst_length;
                     end if;
 
                     -- Reset ongoing length
                     v_atom_burst_length := (others => '0');
                 end if;
 
-                -- Inner gap found -> update gap info
-                if lut_entry.inner_gaps /= 0 then
-                    v_atom_gap_count := v_atom_gap_count + 1;  -- one gap per inner segment
-                    v_sum_atom_gaps  := v_sum_atom_gaps + resize(lut_entry.inner_gaps, COUNTER_W);
+                ----------------------------------------------------------------
+                -- Update gap stats and reset accumulator
+                ----------------------------------------------------------------
+                if v_gap_event = '1' then
+                    v_atom_gap_count := v_atom_gap_count + 1;
+                    v_sum_atom_gaps  := v_sum_atom_gaps + v_new_gap_length;
 
-                    -- Check min/max
-                    if resize(lut_entry.inner_gaps, COUNTER_W) > v_max_atom_gap_length then
-                        v_max_atom_gap_length := resize(lut_entry.inner_gaps, COUNTER_W);
+                    if v_new_gap_length > v_max_atom_gap_length then
+                        v_max_atom_gap_length := v_new_gap_length;
                     end if;
-
-                    if resize(lut_entry.inner_gaps, COUNTER_W) < v_min_atom_gap_length or v_min_atom_gap_length = 0 then
-                        v_min_atom_gap_length := resize(lut_entry.inner_gaps, COUNTER_W);
+                    if v_new_gap_length < v_min_atom_gap_length or v_min_atom_gap_length = 0 then
+                        v_min_atom_gap_length := v_new_gap_length;
                     end if;
 
                     -- Reset ongoing length
@@ -725,10 +679,10 @@ begin
                 end if;
 
                 ----------------------------------------------------------------
-                -- Accumulate ongoing segments
+                -- Accumulate ongoing segments into (possibly just reset) accumulators
                 ----------------------------------------------------------------
                 v_atom_burst_length := v_atom_burst_length + resize(lut_entry.ongoing_burst, COUNTER_W);
-                v_atom_gap_length   := v_atom_gap_length   + resize(lut_entry.ongoing_gap, COUNTER_W);
+                v_atom_gap_length   := v_atom_gap_length   + resize(lut_entry.ongoing_gap,   COUNTER_W);
 
                 ----------------------------------------------------------------
                 -- Count valid atoms
@@ -736,7 +690,7 @@ begin
                 v_atom_count := v_atom_count + resize(popcount4(atom_valids), COUNTER_W);
 
                 ----------------------------------------------------------------
-                -- Update state
+                -- Update prev_atom_valid state
                 ----------------------------------------------------------------
                 if atom_valids(3) = '0' then
                     prev_atom_valid <= 0;
@@ -744,7 +698,9 @@ begin
                     prev_atom_valid <= 1;
                 end if;
 
+                ----------------------------------------------------------------
                 -- Commit back to signals
+                ----------------------------------------------------------------
                 atom_count            <= v_atom_count;
 
                 atom_burst_count      <= v_atom_burst_count;
