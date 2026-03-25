@@ -324,17 +324,6 @@ begin
         -------------------------------------------------------------------------
         -- Test 2: trigger clear, verify all RAM locations zeroed
 
-        -- Trigger clear
-        axi_lite_write(axi_awaddr, axi_awvalid, axi_wdata, axi_wvalid,
-            axi_awready, axi_wready, axi_bvalid, clock, x"00", x"00000002");
-
-        -- Poll status register until clear_done is set (bit 3)
-        loop
-            axi_lite_read(axi_araddr, axi_arvalid, axi_rdata, axi_arready,
-                        axi_rvalid, clock, x"04", status);
-            exit when status(3) = '1';
-        end loop;
-
         -- Verify RAM is zeroed via another DMA readout
         axi_lite_write(axi_awaddr, axi_awvalid, axi_wdata, axi_wvalid,
             axi_awready, axi_wready, axi_bvalid, clock, x"00", x"00000001");

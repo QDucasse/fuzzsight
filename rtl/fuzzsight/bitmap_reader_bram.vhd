@@ -75,17 +75,6 @@ architecture Behavioral of bitmap_reader_bram is
     -- AXIS
     signal tvalid : std_logic := '0';
 
-    -- Clear
-    signal clear_busy       : std_logic := '0';
-    signal clear_done_pulse : std_logic := '0';
-    signal clear_done       : std_logic := '0'; -- sticky clear done pulse for AXI-Lite
-    signal clear_state      : clear_state_t := C_IDLE;
-    signal clear_addr       : unsigned(ADDR_WIDTH-1 downto 0) := (others=>'0');
-    -- handshake
-    signal clear_req_set    : std_logic := '0'; -- driven by AXI-Lite process
-    signal clear_req_clr    : std_logic := '0'; -- driven by CLEAR process
-    signal clear_request    : std_logic := '0'; -- driven by handshake process
-
     -- DMA
     signal dma_busy       : std_logic := '0';
     signal dma_done       : std_logic := '0'; -- sticky dma done pulse for AXI-Lite
@@ -137,13 +126,11 @@ begin
 
     -- BRAM combinatorial
     -- Mux to use DMA or CLEAR process
-    bram_en <= '1' when ((clear_state = C_BUSY and clear_addr < WORD_COUNT) or
-                     dma_state   = READING or
-                     (dma_state  = STREAM and addr_reg < WORD_COUNT)) else '0';
-    bram_addr <= std_logic_vector(clear_addr) when clear_state = C_BUSY else std_logic_vector(addr_reg);
+    bram_en   <= '1' when (dma_state = READING or (dma_state = STREAM and addr_reg < WORD_COUNT)) else '0';
+    bram_addr <=  std_logic_vector(addr_reg);
 
     -- Clear needs to write 0s
-    bram_we   <= '1' when clear_state = C_BUSY else '0';
+    bram_we   <= '1' when (dma_state = STREAM and tvalid = '1' and m_axis_tready = '1') else '0';
     bram_din  <= (others => '0');
 
     -- Handshake between the DMA and AXI-Lite process
@@ -156,69 +143,6 @@ begin
                 dma_request <= '1';
             elsif dma_req_clr = '1' then
                 dma_request <= '0';
-            end if;
-        end if;
-    end process;
-
-    -- Handshake between the CLEAR and AXI-Lite process
-    clear_req_process: process(aclk)
-    begin
-        if rising_edge(aclk) then
-            if aresetn = '0' then
-                clear_request <= '0';
-            elsif clear_req_set = '1' then
-                clear_request <= '1';
-            elsif clear_req_clr = '1' then
-                clear_request <= '0';
-            end if;
-        end if;
-    end process;
-
-    -- BRAM clear FSM
-    clear_process: process(aclk)
-    begin
-        if rising_edge(aclk) then
-            if aresetn = '0' then
-                clear_busy       <= '0';
-                clear_done_pulse <= '0';
-                clear_state      <= C_IDLE;
-                clear_addr       <= (others => '0');
-            else
-                -- Default reset of the pulse, kept in the AXI-Lite exposed sticky reg
-                clear_done_pulse <= '0';
-
-                -- Default reset of the request clear
-                clear_req_clr <= '0';
-
-                case clear_state is
-                    -- IDLE: Waiting for clear request
-                    when C_IDLE =>
-                        clear_busy <= '0';
-
-                        -- Clear triggered by explicitly asking through a PS request
-                        if clear_request = '1' and dma_busy = '0' then
-                            clear_addr    <= (others => '0');
-                            clear_req_clr <= '1';
-                            clear_state   <= C_BUSY;
-                        end if;
-
-                    -- BUSY: Write 0 through all bitmap, incrementing addresses
-                    when C_BUSY =>
-                        clear_busy <= '1';
-
-                        -- Advance address, checking for completion
-                        if clear_addr = WORD_COUNT - 1 then
-                            clear_state <= C_DONE;
-                        else
-                            clear_addr <= clear_addr + 1;
-                        end if;
-
-                    -- DONE: Finished clearing
-                    when C_DONE =>
-                        clear_busy       <= '0';
-                        clear_done_pulse <= '1';
-                        clear_state      <= C_IDLE;
-                end case;
             end if;
         end if;
     end process;
@@ -252,7 +176,7 @@ begin
                         addr_reg     <= (others => '0');
 
                         -- Start if requested, no ongoing clear, and upstream fifo drained
-                        if dma_request = '1' and clear_state = C_IDLE and i_fifo_empty = '1' then
+                        if dma_request = '1' and i_fifo_empty = '1' then
                             dma_busy    <= '1';
                             dma_req_clr <= '1';
                             dma_state   <= READING;
@@ -290,17 +214,13 @@ begin
                             end if;
                         end if;
 
-                    -- Transfer completed
+                    -- DONE: Transfer completed
                     when DONE =>
                         dma_busy       <= '0';
                         dma_done_pulse <= '1';
                         tvalid         <= '0';
                         m_axis_tlast   <= '0';
                         dma_state      <= IDLE;
-
-                        -- No automatic clear of the bitmap here.
-                        -- The PS is expected to ask for it through AXI-Lite
-
                 end case;
             end if;
         end if;
@@ -322,14 +242,10 @@ begin
             else
                 -- clear requests
                 dma_req_set   <= '0';
-                clear_req_set <= '0';
 
                 -- Sticky pulses, cleared on PS read of status register
                 if dma_done_pulse = '1' then
                     dma_done <= '1';
-                end if;
-                if clear_done_pulse = '1' then
-                    clear_done <= '1';
                 end if;
 
                 ----------------------------------------------------------------
@@ -361,12 +277,8 @@ begin
                     case awaddr_reg is
                         -- 0x00: Control register
                         --   bit 0 = dma_req_set: trigger DMA readout
-                        --   bit 1 = clear_req_set: trigger bitmap clear,
-                        --           only write after DMA engine IRQ confirms
-                        --           DDR transfer complete and bitmap processed
                         when x"00" =>
                             dma_req_set   <= wdata_reg(0);
-                            clear_req_set <= wdata_reg(1);
                         when others => null;
                     end case;
 
@@ -403,16 +315,13 @@ begin
                         --                          (sticky, cleared on read)
                         --   bit 4 = clear_busy:    clear in progress
                         when x"04" =>
-                            s_axi_rdata <= (31 downto 5 => '0')
-                                         & clear_busy
-                                         & clear_done
+                            s_axi_rdata <= (31 downto 3 => '0')
                                          & dma_busy
                                          & dma_done
                                          & i_fifo_empty;
 
                             -- Clear out the values when read
                             dma_done   <= '0';
-                            clear_done <= '0';
 
                         when others =>
                             s_axi_rdata <= (others => '0');
