@@ -18,7 +18,8 @@ use work.decoder_constants.all;
 
 entity edge_extractor is
     generic (
-        FIFO_DEPTH : integer := 4
+        FIFO_DEPTH : integer := 4;
+        AXIL_WIDTH : integer := 8
     );
     port (
         aclk     : in  std_logic;
@@ -51,7 +52,30 @@ entity edge_extractor is
         -- Output fifo info
         o_valid   : out std_logic;
         o_empty   : out std_logic;
-        i_ready   : in  std_logic
+        i_ready   : in  std_logic;
+
+        -- AXI4-Lite interface
+        -- write address channel
+        s_axi_awaddr  : in  std_logic_vector(AXIL_WIDTH-1 downto 0);
+        s_axi_awvalid : in  std_logic;
+        s_axi_awready : out std_logic;
+        -- write data channel
+        s_axi_wdata   : in  std_logic_vector(31 downto 0);
+        s_axi_wvalid  : in  std_logic;
+        s_axi_wready  : out std_logic;
+        -- write response channel
+        s_axi_bresp   : out std_logic_vector(1 downto 0);
+        s_axi_bvalid  : out std_logic;
+        s_axi_bready  : in  std_logic;
+        -- read address channel
+        s_axi_araddr  : in  std_logic_vector(AXIL_WIDTH-1 downto 0);
+        s_axi_arvalid : in  std_logic;
+        s_axi_arready : out std_logic;
+        -- read data channel
+        s_axi_rdata   : out std_logic_vector(31 downto 0);
+        s_axi_rresp   : out std_logic_vector(1 downto 0);
+        s_axi_rvalid  : out std_logic;
+        s_axi_rready  : in  std_logic
     );
 end entity;
 
@@ -83,21 +107,24 @@ architecture Behavioral of edge_extractor is
     ---------------
 
     procedure process_atom(
-        atom_valid   : in std_logic;
-        addr         : in std_logic_vector(63 downto 0);
-        atom_elts    : in std_logic_vector(ATOM_ELTS_SIZE-1 downto 0);
-        atom_nb      : in unsigned(ATOM_NB_SIZE-1 downto 0);
+        atom_valid : in std_logic;
+        addr       : in std_logic_vector(63 downto 0);
+        atom_elts  : in std_logic_vector(ATOM_ELTS_SIZE-1 downto 0);
+        atom_nb    : in unsigned(ATOM_NB_SIZE-1 downto 0);
 
-        variable v_prev_slice  : inout std_logic_vector(63 downto 0);
-        variable v_fifo        : inout fifo_t;
-        variable v_fifo_wr_ptr : inout integer;
-        variable v_fifo_count  : inout integer;
-        variable v_index       : inout std_logic_vector(63 downto 0)
+        variable v_prev_slice     : inout std_logic_vector(63 downto 0);
+        variable v_fifo           : inout fifo_t;
+        variable v_fifo_wr_ptr    : inout integer;
+        variable v_fifo_count     : inout integer;
+        variable v_index          : inout std_logic_vector(63 downto 0);
+        variable v_edge_pulse     : out std_logic;
+        variable v_overflow_pulse : out std_logic
     ) is
         variable n_atom_count  : unsigned(ATOM_NB_SIZE-1 downto 0);
         variable addr_extended : unsigned(63 downto 0);
     begin
         if atom_valid = '1' and v_fifo_count < FIFO_DEPTH then
+            v_edge_pulse := '1';
             -- Add the number of N elements to the address
             n_atom_count := count_n_atoms(atom_elts, atom_nb);
             addr_extended := unsigned(addr) + n_atom_count;
@@ -109,8 +136,9 @@ architecture Behavioral of edge_extractor is
             v_fifo(v_fifo_wr_ptr) := v_index;
             v_fifo_wr_ptr := (v_fifo_wr_ptr + 1) mod FIFO_DEPTH;
             v_fifo_count  := v_fifo_count + 1;
-    end if;
-
+        else -- FIFO full, edge dropped
+            v_overflow_pulse := '1';
+        end if;
     end procedure;
 
     ---------------
@@ -123,15 +151,43 @@ architecture Behavioral of edge_extractor is
     signal fifo_rd_ptr : integer range 0 to FIFO_DEPTH-1 := 0;
     signal fifo_count  : integer range 0 to FIFO_DEPTH := 0;
 
+    -- AXI4-Lite signals
+    signal awready : std_logic := '0';
+    signal wready  : std_logic := '0';
+    signal bvalid  : std_logic := '0';
+    signal bresp   : std_logic_vector(1 downto 0) := (others=>'0');
+
+    signal arready : std_logic := '0';
+    signal rvalid  : std_logic := '0';
+    signal rresp   : std_logic_vector(1 downto 0) := (others=>'0');
+
+    signal awaddr_reg : std_logic_vector(AXIL_WIDTH-1 downto 0);
+    signal araddr_reg : std_logic_vector(AXIL_WIDTH-1 downto 0);
+    signal wdata_reg  : std_logic_vector(31 downto 0);
+
+    -- AXI4-Lite flags
+    signal read_in_progress : std_logic := '0';
+    signal w_seen           : std_logic := '0';
+    signal aw_seen          : std_logic := '0';
+
+    -- Stats
+    signal edges_total         : std_logic_vector(31 downto 0) := (others => '0'); -- owned by axi-lite
+    signal edge_pulse          : std_logic := '0'; -- owned by process_atom
+
+    signal fifo_overflow_count : std_logic_vector(31 downto 0) := (others => '0'); -- owned by axi-lite
+    signal overflow_pulse      : std_logic := '0'; -- owned by process_atom
+
 begin
 
-    process(aclk)
-        variable v_prev_slice  : std_logic_vector(63 downto 0);
-        variable v_fifo        : fifo_t;
-        variable v_fifo_wr_ptr : integer range 0 to FIFO_DEPTH-1;
-        variable v_fifo_rd_ptr : integer range 0 to FIFO_DEPTH-1;
-        variable v_fifo_count  : integer range 0 to FIFO_DEPTH;
-        variable v_index       : std_logic_vector(63 downto 0);
+    process_packet: process(aclk)
+        variable v_prev_slice     : std_logic_vector(63 downto 0);
+        variable v_fifo           : fifo_t;
+        variable v_fifo_wr_ptr    : integer range 0 to FIFO_DEPTH-1;
+        variable v_fifo_rd_ptr    : integer range 0 to FIFO_DEPTH-1;
+        variable v_fifo_count     : integer range 0 to FIFO_DEPTH;
+        variable v_index          : std_logic_vector(63 downto 0);
+        variable v_edge_pulse     : std_logic;
+        variable v_overflow_pulse : std_logic;
     begin
         if rising_edge(aclk) then
             if aresetn = '0' then
@@ -160,15 +216,22 @@ begin
                 v_fifo_count  := fifo_count;
                 v_prev_slice  := prev_slice;
 
+                v_edge_pulse     := '0';
+                v_overflow_pulse := '0';
+
                 -- Sequentially process ports 0..3
                 process_atom(i_atom_valid0, i_address_reg_0_0, i_atom_elements0, i_atom_nb0,
-                             v_prev_slice, v_fifo, v_fifo_wr_ptr, v_fifo_count, v_index);
+                             v_prev_slice, v_fifo, v_fifo_wr_ptr, v_fifo_count, v_index,
+                             v_edge_pulse, v_overflow_pulse);
                 process_atom(i_atom_valid1, i_address_reg_0_1, i_atom_elements1, i_atom_nb1,
-                             v_prev_slice, v_fifo, v_fifo_wr_ptr, v_fifo_count, v_index);
+                             v_prev_slice, v_fifo, v_fifo_wr_ptr, v_fifo_count, v_index,
+                             v_edge_pulse, v_overflow_pulse);
                 process_atom(i_atom_valid2, i_address_reg_0_2, i_atom_elements2, i_atom_nb2,
-                             v_prev_slice, v_fifo, v_fifo_wr_ptr, v_fifo_count, v_index);
+                             v_prev_slice, v_fifo, v_fifo_wr_ptr, v_fifo_count, v_index,
+                             v_edge_pulse, v_overflow_pulse);
                 process_atom(i_atom_valid3, i_address_reg_0_3, i_atom_elements3, i_atom_nb3,
-                             v_prev_slice, v_fifo, v_fifo_wr_ptr, v_fifo_count, v_index);
+                             v_prev_slice, v_fifo, v_fifo_wr_ptr, v_fifo_count, v_index,
+                             v_edge_pulse, v_overflow_pulse);
 
                 -- Output FIFO to downstream
                 if v_fifo_count > 0 and i_ready = '1' then
@@ -195,7 +258,116 @@ begin
                 fifo_count  <= v_fifo_count;
                 prev_slice  <= v_prev_slice;
 
+                edge_pulse     <= v_edge_pulse;
+                overflow_pulse <= v_overflow_pulse;
+
             end if;
         end if;
     end process;
+
+    axi_lite_process: process(aclk)
+    begin
+        if rising_edge(aclk) then
+            if aresetn = '0' then
+                awready          <= '0';
+                wready           <= '0';
+                bvalid           <= '0';
+                arready          <= '0';
+                rvalid           <= '0';
+                aw_seen          <= '0';
+                w_seen           <= '0';
+                read_in_progress <= '0';
+                edges_total         <= (others => '0');
+                fifo_overflow_count <= (others => '0');
+            else
+                -- Saturating counters
+                if edge_pulse = '1' then
+                    if edges_total /= x"FFFFFFFF" then
+                        edges_total <= std_logic_vector(unsigned(edges_total) + 1);
+                    end if;
+                end if;
+
+                if overflow_pulse = '1' then
+                    if fifo_overflow_count /= x"FFFFFFFF" then
+                        fifo_overflow_count <= std_logic_vector(unsigned(fifo_overflow_count) + 1);
+                    end if;
+                end if;
+
+                ----------------------------------------------------------------
+                -- WRITE CHANNEL
+                if awready = '0' and s_axi_awvalid = '1' then
+                    awready    <= '1';
+                    awaddr_reg <= s_axi_awaddr;
+                    aw_seen    <= '1';
+                else
+                    awready <= '0';
+                end if;
+
+                if wready = '0' and s_axi_wvalid = '1' then
+                    wready    <= '1';
+                    wdata_reg <= s_axi_wdata;
+                    w_seen    <= '1';
+                else
+                    wready <= '0';
+                end if;
+
+                if aw_seen = '1' and w_seen = '1' and bvalid = '0' then
+                    bvalid <= '1';
+                    bresp  <= "00";
+
+                    case awaddr_reg is
+                        -- 0x00: Control register
+                        --   bit 0 = stats_reset: clear edges_total and fifo_overflow_count
+                        when x"00" =>
+                            if wdata_reg(0) = '1' then
+                                edges_total         <= (others => '0');
+                                fifo_overflow_count <= (others => '0');
+                            end if;
+                        when others => null;
+                    end case;
+
+                elsif bvalid = '1' and s_axi_bready = '1' then
+                    bvalid  <= '0';
+                    aw_seen <= '0';
+                    w_seen  <= '0';
+                end if;
+
+                ----------------------------------------------------------------
+                -- READ CHANNEL
+                if arready = '0' and s_axi_arvalid = '1' and read_in_progress = '0' then
+                    arready          <= '1';
+                    araddr_reg       <= s_axi_araddr;
+                    read_in_progress <= '1';
+                else
+                    arready <= '0';
+                end if;
+
+                if read_in_progress = '1' and rvalid = '0' then
+                    rvalid <= '1';
+                    rresp  <= "00";
+
+                    case araddr_reg is
+                        -- 0x00: edges_total
+                        --   32-bit saturating count of edges produced since reset
+                        when x"00" =>
+                            s_axi_rdata <= edges_total;
+
+                        -- 0x04: fifo_overflow_count
+                        --   32-bit saturating count of edges dropped due to FIFO full
+                        when x"04" =>
+                            s_axi_rdata <= fifo_overflow_count;
+
+                        when others =>
+                            s_axi_rdata <= (others => '0');
+                    end case;
+
+                elsif rvalid = '1' and s_axi_rready = '1' then
+                    rvalid           <= '0';
+                    read_in_progress <= '0';
+                end if;
+
+            end if;
+        end if;
+    end process;
+
 end Behavioral;
