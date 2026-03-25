@@ -2,33 +2,18 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
--- Bitmap Writer
---
--- This module plugs into one port of a true dual port BRAM. It supports two main
--- roles: exposing an AXI-Lite to the PS for control and setup, interfacing the
--- BRAM port to AXI-Stream, enabling DMA of the BRAM.
---
--- axi_stream_process:
--- Once the coverage extraction is done, it exposes the bitmap over an AXI-Stream
--- interface to be written back into PS through DMA.
---
--- axi_lite_process:
--- Exposes AXI-Lite registers to read and write, gathering information from the
--- fuzzer to know when the child exists (stop updating edges or waiting for new
--- packets) and return back when the edges are all cleared from the pipeline.
--- The PS is then expected to DMA the bitmap.
-
 entity bitmap_reader_bram is
     generic (
-        ADDR_WIDTH   : integer := 16; -- makes a 64KB map, AFL++ default
-        AXIS_WIDTH   : integer := 32  -- 32-bit AXI-Stream transfer
+        ADDR_WIDTH : integer := 16; -- makes a 64KB map, AFL++ default
+        AXIL_WIDTH : integer := 8;  -- address length for AXI-Lite register
+        AXIS_WIDTH : integer := 32  -- 32-bit AXI-Stream transfer
     );
     port (
-        aclk        : in  std_logic;
-        aresetn     : in  std_logic;
+        aclk    : in std_logic;
+        aresetn : in std_logic;
 
         -- FIFO info
-        i_fifo_empty      : in std_logic;
+        i_fifo_empty      : in  std_logic;
         o_fifo_freeze_req : out std_logic;
 
         -- BRAM interface
@@ -39,14 +24,14 @@ entity bitmap_reader_bram is
         bram_we   : out std_logic;
 
         -- AXI-Stream interface
-        m_axis_tready : in std_logic;
+        m_axis_tready : in  std_logic;
         m_axis_tdata  : out std_logic_vector(AXIS_WIDTH-1 downto 0);
         m_axis_tvalid : out std_logic;
         m_axis_tlast  : out std_logic;
 
         -- AXI4-Lite interface
         -- write address channel
-        s_axi_awaddr  : in  std_logic_vector(ADDR_WIDTH-1 downto 0);
+        s_axi_awaddr  : in  std_logic_vector(AXIL_WIDTH-1 downto 0);
         s_axi_awvalid : in  std_logic;
         s_axi_awready : out std_logic;
         -- write data channel
@@ -58,7 +43,7 @@ entity bitmap_reader_bram is
         s_axi_bvalid  : out std_logic;
         s_axi_bready  : in  std_logic;
         -- read address channel
-        s_axi_araddr  : in  std_logic_vector(ADDR_WIDTH-1 downto 0);
+        s_axi_araddr  : in  std_logic_vector(AXIL_WIDTH-1 downto 0);
         s_axi_arvalid : in  std_logic;
         s_axi_arready : out std_logic;
         -- read data channel
@@ -80,43 +65,41 @@ architecture Behavioral of bitmap_reader_bram is
     ---------------
     -- Types
     ---------------
-    type dma_state_t   is (IDLE, STREAM, DONE);
+    type dma_state_t   is (IDLE, READING, STREAM, DONE);
     type clear_state_t is (C_IDLE, C_BUSY, C_DONE);
 
     ---------------
     -- Signals
     ---------------
 
-    -- FIFO
-    signal fifo_ready : std_logic;
-    signal fifo_empty : std_logic;
-    signal fifo_freeze_req : std_logic;
-
     -- AXIS
-    signal tvalid : std_logic;
+    signal tvalid : std_logic := '0';
 
-    -- Clear logic
+    -- Clear
     signal clear_busy       : std_logic := '0';
     signal clear_done_pulse : std_logic := '0';
     signal clear_done       : std_logic := '0'; -- sticky clear done pulse for AXI-Lite
     signal clear_state      : clear_state_t := C_IDLE;
-    signal clear_addr       : unsigned(ADDR_WIDTH-1 downto 0) := (others => '0');
+    signal clear_addr       : unsigned(ADDR_WIDTH-1 downto 0) := (others=>'0');
+    -- handshake
+    signal clear_req_set    : std_logic := '0'; -- driven by AXI-Lite process
+    signal clear_req_clr    : std_logic := '0'; -- driven by CLEAR process
+    signal clear_request    : std_logic := '0'; -- driven by handshake process
 
     -- DMA
-    signal dma_start      : std_logic := '0';
     signal dma_busy       : std_logic := '0';
     signal dma_done       : std_logic := '0'; -- sticky dma done pulse for AXI-Lite
     signal dma_done_pulse : std_logic := '0';
     signal dma_state      : dma_state_t := IDLE;
+    -- handshake
+    signal dma_req_set    : std_logic := '0'; -- driven by AXI-Lite process
+    signal dma_req_clr    : std_logic := '0'; -- driven by DMA process
+    signal dma_request    : std_logic := '0'; -- driven by handshake process
 
-    -- BRAM read pipeline
-    signal addr_reg : unsigned(ADDR_WIDTH-1 downto 0);
-    signal data_reg : std_logic_vector(31 downto 0);
+    -- BRAM read register (1-cycle latency)
+    signal addr_reg : unsigned(ADDR_WIDTH-1 downto 0) := (others=>'0');
 
-    -- AXI-Lite requests/actions
-    signal clear_bitmap : std_logic := '0';
-
-    -- AXI-Lite signals
+    -- AXI4-Lite signals
     signal awready : std_logic := '0';
     signal wready  : std_logic := '0';
     signal bvalid  : std_logic := '0';
@@ -126,22 +109,23 @@ architecture Behavioral of bitmap_reader_bram is
     signal rvalid  : std_logic := '0';
     signal rresp   : std_logic_vector(1 downto 0) := (others=>'0');
 
-    signal awaddr_reg : std_logic_vector(ADDR_WIDTH-1 downto 0);
-    signal araddr_reg : std_logic_vector(ADDR_WIDTH-1 downto 0);
+    signal awaddr_reg : std_logic_vector(AXIL_WIDTH-1 downto 0);
+    signal araddr_reg : std_logic_vector(AXIL_WIDTH-1 downto 0);
     signal wdata_reg  : std_logic_vector(31 downto 0);
 
-    -- AXI Lite flags
+    -- AXI4-Lite flags
     signal read_in_progress : std_logic := '0';
     signal w_seen           : std_logic := '0';
     signal aw_seen          : std_logic := '0';
 begin
-    -- FIFO
-    fifo_freeze_req <= dma_start;
 
-    -- AXI-Stream output
+    -- Freeze request sent to the updstream fifo
+    o_fifo_freeze_req <= '1' when dma_state /= IDLE else '0';
+
+    -- AXI-Stream
     m_axis_tvalid <= tvalid; -- Needed because we read it too!
 
-    -- AXI-Lite outputs
+    -- AXI4-Lite
     s_axi_awready <= awready;
     s_axi_wready  <= wready;
     s_axi_bvalid  <= bvalid;
@@ -151,152 +135,158 @@ begin
     s_axi_rvalid  <= rvalid;
     s_axi_rresp   <= rresp;
 
-    -- FIFO empty latch
-    fifo_latch_process: process(aclk)
+    -- BRAM combinatorial
+    -- Mux to use DMA or CLEAR process
+    bram_en <= '1' when ((clear_state = C_BUSY and clear_addr < WORD_COUNT) or
+                     dma_state   = READING or
+                     (dma_state  = STREAM and addr_reg < WORD_COUNT)) else '0';
+    bram_addr <= std_logic_vector(clear_addr) when clear_state = C_BUSY else std_logic_vector(addr_reg);
+
+    -- Clear needs to write 0s
+    bram_we   <= '1' when clear_state = C_BUSY else '0';
+    bram_din  <= (others => '0');
+
+    -- Handshake between the DMA and AXI-Lite process
+    dma_req_process: process(aclk)
     begin
         if rising_edge(aclk) then
             if aresetn = '0' then
-                fifo_empty <= '0';
-            else
-                if dma_start = '1' and fifo_empty = '0' then
-                    fifo_empty <= i_fifo_empty;
-                end if;
+                dma_request <= '0';
+            elsif dma_req_set = '1' then
+                dma_request <= '1';
+            elsif dma_req_clr = '1' then
+                dma_request <= '0';
             end if;
         end if;
     end process;
 
-    -- BRAM clear process and FSM
-    bitram_clear_process: process(aclk)
+    -- Handshake between the CLEAR and AXI-Lite process
+    clear_req_process: process(aclk)
     begin
         if rising_edge(aclk) then
             if aresetn = '0' then
-                clear_busy  <= '0';
-                clear_done  <= '0';
-                clear_state <= C_IDLE;
-                clear_addr  <= (others => '0');
-                bram_en     <= '0';
-                bram_we     <= '0';
+                clear_request <= '0';
+            elsif clear_req_set = '1' then
+                clear_request <= '1';
+            elsif clear_req_clr = '1' then
+                clear_request <= '0';
+            end if;
+        end if;
+    end process;
+
+    -- BRAM clear FSM
+    clear_process: process(aclk)
+    begin
+        if rising_edge(aclk) then
+            if aresetn = '0' then
+                clear_busy       <= '0';
+                clear_done_pulse <= '0';
+                clear_state      <= C_IDLE;
+                clear_addr       <= (others => '0');
             else
+                -- Default reset of the pulse, kept in the AXI-Lite exposed sticky reg
+                clear_done_pulse <= '0';
+
+                -- Default reset of the request clear
+                clear_req_clr <= '0';
+
                 case clear_state is
-                    -- Waiting for clear_bitmap
+                    -- IDLE: Waiting for clear request
                     when C_IDLE =>
                         clear_busy <= '0';
-                        clear_done_pulse <= '0';
 
-                        if (clear_bitmap = '1') and (dma_busy = '0') then
-                            clear_addr  <= (others => '0');
-                            clear_state <= C_BUSY;
+                        -- Clear triggered by explicitly asking through a PS request
+                        if clear_request = '1' and dma_busy = '0' then
+                            clear_addr    <= (others => '0');
+                            clear_req_clr <= '1';
+                            clear_state   <= C_BUSY;
                         end if;
 
-                        bram_en <= '0';
-                        bram_we <= '0';
-
-                    -- Writes 0 then increments address
+                    -- BUSY: Write 0 through all bitmap, incrementing addresses
                     when C_BUSY =>
                         clear_busy <= '1';
-                        clear_done_pulse <= '0';
 
-                        bram_en    <= '1';
-                        bram_we    <= '1';
-                        bram_addr  <= std_logic_vector(clear_addr);
-                        bram_din   <= (others => '0');
-
-                        -- Advance address
-                        if clear_addr = (2**ADDR_WIDTH - 1) then
+                        -- Advance address, checking for completion
+                        if clear_addr = WORD_COUNT - 1 then
                             clear_state <= C_DONE;
                         else
                             clear_addr <= clear_addr + 1;
                         end if;
-                    -- BRAM completely cleared
+
+                    -- DONE: Finished clearing
                     when C_DONE =>
-                        clear_done_pulse <= '1';
                         clear_busy       <= '0';
-
-                        bram_en      <= '0';
-                        bram_we      <= '0';
-                        clear_state  <= C_IDLE;
-                        clear_bitmap <= '0'; -- Auto-clear once done
-
+                        clear_done_pulse <= '1';
+                        clear_state      <= C_IDLE;
                 end case;
             end if;
         end if;
     end process;
 
-    -- BRAM AXI-Stream interface for DMA
-    axi_stream_process: process(aclk)
-        variable first_read : std_logic := '1';
-        variable v_data_valid : std_logic := '0';
+    -- DMA FSM
+    dma_process: process(aclk)
     begin
         if rising_edge(aclk) then
             if aresetn = '0' then
-                tvalid        <= '0';
-                m_axis_tlast  <= '0';
-                dma_busy      <= '0';
-                dma_done      <= '0';
-                dma_state     <= IDLE;
-
-                addr_reg <= (others=>'0');
-                data_reg <= (others=>'0');
-                v_data_valid := '0';
+                dma_busy       <= '0';
+                dma_done_pulse <= '0';
+                dma_state      <= IDLE;
+                tvalid         <= '0';
+                m_axis_tlast   <= '0';
+                m_axis_tdata   <= (others => '0');
+                addr_reg       <= (others => '0');
             else
+                -- Default reset of the pulse, kept in the AXI-Lite exposed sticky reg
+                dma_done_pulse <= '0';
+
+                -- Default reset of the request clear
+                dma_req_clr <= '0';
+
                 case dma_state is
-                    -- Waiting for transfer
+
+                    -- IDLE: Waiting for DMA request
                     when IDLE =>
-                        dma_busy       <= '0';
-                        dma_done_pulse <= '0';
+                        dma_busy     <= '0';
+                        tvalid       <= '0';
+                        m_axis_tlast <= '0';
+                        addr_reg     <= (others => '0');
 
-                        tvalid         <= '0';
-                        m_axis_tlast   <= '0';
-                        addr_reg       <= (others => '0');
-                        v_data_valid   := '0';
-
-                        --  Start if asked for and no clears are ongoing
-                        if (dma_start = '1') and (clear_state = C_IDLE) and (fifo_empty = '1') then
-                            dma_busy  <= '1';
-                            dma_state <= STREAM;
+                        -- Start if requested, no ongoing clear, and upstream fifo drained
+                        if dma_request = '1' and clear_state = C_IDLE and i_fifo_empty = '1' then
+                            dma_busy    <= '1';
+                            dma_req_clr <= '1';
+                            dma_state   <= READING;
                         end if;
-                    -- Streaming BRAM to AXI-DMA
+
+                    -- READING: Account for the 1-cycle BRAM read latency. Issue the
+                    -- first read here, for the data to be valid in STREAM.
+                    when READING =>
+                        addr_reg  <= addr_reg + 1;
+                        dma_state <= STREAM;
+                        dma_busy  <= '1';
+
+                    -- STREAM: AXI-Stream handshake with the read data. Latency of
+                    -- 1 cycle is accounted with the READING state.
                     when STREAM =>
-                        dma_busy       <= '1';
-                        dma_done_pulse <= '0';
+                        dma_busy  <= '1';
 
-                        bram_en <= '1';
-                        bram_we <= '0';
+                        -- bram_dout is valid here due to READING cycle
+                        m_axis_tdata <= bram_dout;
+                        tvalid       <= '1';
 
-                        -- Issue read address (data read next cycle)
-                        bram_addr <= std_logic_vector(addr_reg);
-
-                        -- Register read data for AXIS output
-                        if v_data_valid = '0' then
-                            -- Read 4 bytes and pack into 32-bit word
-                            data_reg     <= bram_dout;
-                            v_data_valid := '1';
-                        end if;
-
-                        -- Drive AXIS
-                        if v_data_valid = '1' then
-                            m_axis_tdata <= data_reg;
-                            tvalid       <= '1';
-
-                            -- Check tlast
-                            if addr_reg = WORD_COUNT-1 then
-                                m_axis_tlast <= '1';
-                            else
-                                m_axis_tlast <= '0';
-                            end if;
+                        if addr_reg = WORD_COUNT then
+                            m_axis_tlast <= '1';
                         else
-                            tvalid       <= '0';
                             m_axis_tlast <= '0';
                         end if;
 
-                        -- Advance address when downstream consumes
-                        if (v_data_valid = '0') or (m_axis_tready = '1') then
-                            addr_reg <= addr_reg + 1;
-                            -- Clear valid once consumed
-                            v_data_valid := '0';
-
+                        -- Advance only when downstream consumes, issue next
+                        -- read speculatively to maintain full throughput
+                        if m_axis_tready = '1' then
                             if addr_reg = WORD_COUNT then
                                 dma_state <= DONE;
+                            else
+                                addr_reg  <= addr_reg + 1;
                             end if;
                         end if;
 
@@ -304,32 +294,37 @@ begin
                     when DONE =>
                         dma_busy       <= '0';
                         dma_done_pulse <= '1';
+                        tvalid         <= '0';
+                        m_axis_tlast   <= '0';
+                        dma_state      <= IDLE;
 
-                        tvalid        <= '0';
-                        m_axis_tlast  <= '0';
-                        dma_state     <= IDLE;
-                        clear_bitmap  <= '1'; -- Clear once DMA done
+                        -- No automatic clear of the bitmap here.
+                        -- The PS is expected to ask for it through AXI-Lite
+
                 end case;
             end if;
         end if;
     end process;
 
-
-    -- AXI-Lite interface
+    -- AXI-Lite
     axi_lite_process: process(aclk)
     begin
         if rising_edge(aclk) then
             if aresetn = '0' then
-                awready <= '0';
-                wready  <= '0';
-                bvalid  <= '0';
-                arready <= '0';
-                rvalid  <= '0';
-                aw_seen <= '0';
-                w_seen  <= '0';
+                awready          <= '0';
+                wready           <= '0';
+                bvalid           <= '0';
+                arready          <= '0';
+                rvalid           <= '0';
+                aw_seen          <= '0';
+                w_seen           <= '0';
                 read_in_progress <= '0';
             else
-                -- Propagate pulse to sticky signals, only cleared after read
+                -- clear requests
+                dma_req_set   <= '0';
+                clear_req_set <= '0';
+
+                -- Sticky pulses, cleared on PS read of status register
                 if dma_done_pulse = '1' then
                     dma_done <= '1';
                 end if;
@@ -341,7 +336,7 @@ begin
                 -- WRITE CHANNEL
 
                 -- Accept address
-                if (awready = '0' and s_axi_awvalid = '1') then
+                if awready = '0' and s_axi_awvalid = '1' then
                     awready    <= '1';
                     awaddr_reg <= s_axi_awaddr;
                     aw_seen    <= '1';
@@ -350,7 +345,7 @@ begin
                 end if;
 
                 -- Accept data
-                if (wready = '0' and s_axi_wvalid = '1') then
+                if wready = '0' and s_axi_wvalid = '1' then
                     wready    <= '1';
                     wdata_reg <= s_axi_wdata;
                     w_seen    <= '1';
@@ -359,14 +354,21 @@ begin
                 end if;
 
                 -- Generate write response
-                if (aw_seen = '1' and w_seen = '1' and bvalid = '0') then
+                if aw_seen = '1' and w_seen = '1' and bvalid = '0' then
                     bvalid <= '1';
                     bresp  <= "00";
 
-                    -- Register write
-                    if awaddr_reg = x"00" then
-                        dma_start    <= wdata_reg(0);
-                    end if;
+                    case awaddr_reg is
+                        -- 0x00: Control register
+                        --   bit 0 = dma_req_set: trigger DMA readout
+                        --   bit 1 = clear_req_set: trigger bitmap clear,
+                        --           only write after DMA engine IRQ confirms
+                        --           DDR transfer complete and bitmap processed
+                        when x"00" =>
+                            dma_req_set   <= wdata_reg(0);
+                            clear_req_set <= wdata_reg(1);
+                        when others => null;
+                    end case;
 
                 elsif (bvalid = '1' and s_axi_bready = '1') then
                     bvalid  <= '0';
@@ -378,7 +380,7 @@ begin
                 -- READ CHANNEL
 
                 -- Accept address
-                if (arready = '0' and s_axi_arvalid = '1' and read_in_progress = '0') then
+                if arready = '0' and s_axi_arvalid = '1' and read_in_progress = '0' then
                     arready          <= '1';
                     araddr_reg       <= s_axi_araddr;
                     read_in_progress <= '1';
@@ -387,29 +389,40 @@ begin
                 end if;
 
                 -- Provide data
-                if (read_in_progress = '1' and rvalid = '0') then
+                if read_in_progress = '1' and rvalid = '0' then
                     rvalid <= '1';
                     rresp  <= "00";
 
                     case araddr_reg is
-                        -- Offsets:
-                        --   0x00: Control (write only)
-                        --   0x04: Status register (bit 0 = dma_busy, bit 1 = dma_done, bit 2 = fifo_empty)
+                        -- 0x04: Status register
+                        --   bit 0 = i_fifo_empty:  FIFO drained, safe to DMA
+                        --   bit 1 = dma_done:      DMA readout complete
+                        --                          (sticky, cleared on read)
+                        --   bit 2 = dma_busy:      DMA in progress
+                        --   bit 3 = clear_done:    bitmap clear complete
+                        --                          (sticky, cleared on read)
+                        --   bit 4 = clear_busy:    clear in progress
+                        when x"04" =>
+                            s_axi_rdata <= (31 downto 5 => '0')
+                                         & clear_busy
+                                         & clear_done
+                                         & dma_busy
+                                         & dma_done
+                                         & i_fifo_empty;
 
-                        -- reset bit not readable as it is self-clearing
-                        when x"04" => s_axi_rdata <= (31 downto 5 => '0') & clear_busy & clear_done & dma_busy &  dma_done & i_fifo_empty;
+                            -- Clear out the values when read
+                            dma_done   <= '0';
+                            clear_done <= '0';
 
-                        -- Fire clear status request to 0 clear_done/dma_done in their respective processes
-                        dma_done   <= '1';
-                        clear_done <= '1';
-
-                        when others => s_axi_rdata <= (others=>'0');
+                        when others =>
+                            s_axi_rdata <= (others => '0');
                     end case;
 
-                elsif (rvalid = '1' and s_axi_rready = '1') then
-                    rvalid <= '0';
+                elsif rvalid = '1' and s_axi_rready = '1' then
+                    rvalid           <= '0';
                     read_in_progress <= '0';
                 end if;
+
             end if;
         end if;
     end process;

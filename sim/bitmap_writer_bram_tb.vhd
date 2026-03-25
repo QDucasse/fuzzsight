@@ -82,18 +82,14 @@ begin
     bram_process: process(clock)
     begin
         if rising_edge(clock) then
-            -- read-first: sample address before write
-            if bram_en = '1' and bram_we = '0' then
-                bram_dout <= ram(to_integer(unsigned(bram_addr)));
-            end if;
-
-            -- write happens after read sample
-            if bram_en = '1' and bram_we = '1' then
-                ram(to_integer(unsigned(bram_addr))) <= bram_din;
+            if bram_en = '1' then
+                bram_dout <= ram(to_integer(unsigned(bram_addr)));  -- always, read-first
+                if bram_we = '1' then
+                    ram(to_integer(unsigned(bram_addr))) <= bram_din;
+                end if;
             end if;
         end if;
     end process;
-
     -- Simulation process
     simulation_process: process
     begin
