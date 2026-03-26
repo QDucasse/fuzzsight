@@ -287,7 +287,7 @@ begin
 
         -- Pre-fill RAM with known pattern
         for i in 0 to WORD_COUNT-1 loop
-            ram(i) := std_logic_vector(to_unsigned(i, 32));
+            ram(i) := std_logic_vector(to_unsigned(i + 1, 32));
         end loop;
 
         wait until rising_edge(clock);
@@ -299,7 +299,7 @@ begin
         -- Collect and verify AXI-Stream output for the first inputs
         for i in 0 to WORD_COUNT-1 loop
             wait until rising_edge(clock) and axis_tvalid = '1';
-            assert axis_tdata = std_logic_vector(to_unsigned(i, 32))
+            assert axis_tdata = std_logic_vector(to_unsigned(i + 1, 32))
                 report "Data mismatch at word " & integer'image(i);
             if i = WORD_COUNT-1 then
                 assert axis_tlast = '1' report "tlast not asserted on last word";
@@ -320,6 +320,12 @@ begin
         axi_lite_read(axi_araddr, axi_arvalid, axi_rdata, axi_arready,
                       axi_rvalid, clock, x"04", status);
         assert status(1) = '0' report "dma_done not cleared after read";
+
+        for i in 0 to WORD_COUNT-1 loop
+            assert ram(i) = x"00000000"
+                report "RAM not zeroed at word " & integer'image(i)
+                    & " got " & integer'image(to_integer(unsigned(ram(i))));
+        end loop;
 
         -------------------------------------------------------------------------
         -- Test 2: trigger clear, verify all RAM locations zeroed

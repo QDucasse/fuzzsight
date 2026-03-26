@@ -130,7 +130,7 @@ begin
     bram_addr <=  std_logic_vector(addr_reg);
 
     -- Clear needs to write 0s
-    bram_we   <= '1' when (dma_state = STREAM and tvalid = '1' and m_axis_tready = '1') else '0';
+    bram_we <= '1' when (dma_state = READING or (dma_state = STREAM and m_axis_tready = '1')) else '0';
     bram_din  <= (others => '0');
 
     -- Handshake between the DMA and AXI-Lite process
