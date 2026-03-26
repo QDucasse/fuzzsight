@@ -47,7 +47,7 @@ new:
 	sed -i 's/base_zynq/$(PROJECT)/g' bd/$(PROJECT).tcl
 
 # -- vivado
-project:
+project: update
 	PROJECT=$(PROJECT) PROJECT_ROOT=$(PROJECT_ROOT) PART_NAME=$(PART_NAME) BOARD_NAME=$(BOARD_NAME) \
 	$(RUN_VIVADO) $(SCRIPTS_DIR)/vivado/create_project.tcl
 
