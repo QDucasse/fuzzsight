@@ -393,19 +393,19 @@ begin
                     rresp  <= "00";
 
                     case araddr_reg is
-                        -- 0x00: edges_total
+                        -- 0x04: edges_total
                         --   32-bit saturating count of edges produced since reset
-                        when x"00" =>
+                        when x"04" =>
                             s_axi_rdata <= edges_total;
 
-                        -- 0x04: fifo_overflow_count
+                        -- 0x08: fifo_overflow_count
                         --   32-bit saturating count of edges dropped due to FIFO full
-                        when x"04" =>
+                        when x"08" =>
                             s_axi_rdata <= fifo_overflow_count;
 
-                        -- 0x08: freeze_drop_count
+                        -- 0x0C: freeze_drop_count
                         --   32-bit saturating count of edges dropped due to freeze request
-                        when x"08" =>
+                        when x"0C" =>
                             s_axi_rdata <= freeze_drop_count;
 
                         when others =>

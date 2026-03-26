@@ -371,16 +371,16 @@ begin
 
         wait until rising_edge(clock);
 
-        -- Read freeze_drop_count (0x08)
+        -- Read freeze_drop_count (0x0C)
         axi_lite_read(axi_araddr, axi_arvalid, axi_rdata, axi_arready,
-                    axi_rvalid, clock, x"08", status);
+                    axi_rvalid, clock, x"0C", status);
 
         report "freeze_drop_count = " & integer'image(to_integer(unsigned(status)));
         assert unsigned(status) = 4 report "Expected 4 freeze drops";
 
         -- overflow should be zero since FIFO was empty and ready was high
         axi_lite_read(axi_araddr, axi_arvalid, axi_rdata, axi_arready,
-                    axi_rvalid, clock, x"04", status);
+                    axi_rvalid, clock, x"08", status);
         assert status = x"00000000" report "overflow_count should be zero during freeze test";
 
 
@@ -429,15 +429,15 @@ begin
         --------------
         -- Read stats
 
-        -- Read edges_total (0x00)
+        -- Read edges_total (0x04)
         axi_lite_read(axi_araddr, axi_arvalid, axi_rdata, axi_arready,
-                        axi_rvalid, clock, x"00", status);
+                        axi_rvalid, clock, x"04", status);
         report "edges_total = " & integer'image(to_integer(unsigned(status)));
         assert unsigned(status) > 0 report "edges_total should be non-zero";
 
-        -- Read fifo_overflow_count (0x04)
+        -- Read fifo_overflow_count (0x08)
         axi_lite_read(axi_araddr, axi_arvalid, axi_rdata, axi_arready,
-                        axi_rvalid, clock, x"04", status);
+                        axi_rvalid, clock, x"08", status);
         report "fifo_overflow_count = " & integer'image(to_integer(unsigned(status)));
         assert unsigned(status) > 0 report "overflow should have occurred";
 
@@ -448,11 +448,11 @@ begin
 
         -- Verify both counters cleared
         axi_lite_read(axi_araddr, axi_arvalid, axi_rdata, axi_arready,
-                        axi_rvalid, clock, x"00", status);
+                        axi_rvalid, clock, x"04", status);
         assert status = x"00000000" report "edges_total not cleared after reset";
 
         axi_lite_read(axi_araddr, axi_arvalid, axi_rdata, axi_arready,
-                        axi_rvalid, clock, x"04", status);
+                        axi_rvalid, clock, x"08", status);
         assert status = x"00000000" report "fifo_overflow_count not cleared after reset";
 
         wait;
