@@ -1671,6 +1671,8 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
   connect_bd_intf_net -intf_net zynq_ultra_ps_pl_M_AXI_HPM0_LPD [get_bd_intf_pins zynq_ultra_ps_pl/M_AXI_HPM0_LPD] [get_bd_intf_pins axi_smc/S00_AXI]
 
   # Create port connections
+  connect_bd_net -net axi_dma_s2mm_introut  [get_bd_pins axi_dma/s2mm_introut] \
+  [get_bd_pins zynq_ultra_ps_pl/pl_ps_irq0]
   connect_bd_net -net bitmap_reader_bram_0_bram_addr  [get_bd_pins bitmap_reader_bram/bram_addr] \
   [get_bd_pins bram/addrb]
   connect_bd_net -net bitmap_reader_bram_0_bram_din  [get_bd_pins bitmap_reader_bram/bram_din] \
