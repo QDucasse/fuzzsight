@@ -46,6 +46,9 @@ entity edge_extractor is
         i_atom_elements3  : in std_logic_vector(ATOM_ELTS_SIZE-1 downto 0);
         i_atom_nb3        : in unsigned(ATOM_NB_SIZE-1 downto 0);
 
+        -- Freeze request
+        i_freeze_request  : in std_logic;
+
         -- Output edge index
         o_index   : out std_logic_vector(63 downto 0);
 
@@ -111,33 +114,41 @@ architecture Behavioral of edge_extractor is
         addr       : in std_logic_vector(63 downto 0);
         atom_elts  : in std_logic_vector(ATOM_ELTS_SIZE-1 downto 0);
         atom_nb    : in unsigned(ATOM_NB_SIZE-1 downto 0);
+        freeze_req : in std_logic;
 
-        variable v_prev_slice     : inout std_logic_vector(63 downto 0);
-        variable v_fifo           : inout fifo_t;
-        variable v_fifo_wr_ptr    : inout integer;
-        variable v_fifo_count     : inout integer;
-        variable v_index          : inout std_logic_vector(63 downto 0);
-        variable v_edge_pulse     : out std_logic;
-        variable v_overflow_pulse : out std_logic
+        variable v_prev_slice        : inout std_logic_vector(63 downto 0);
+        variable v_fifo              : inout fifo_t;
+        variable v_fifo_wr_ptr       : inout integer;
+        variable v_fifo_count        : inout integer;
+        variable v_index             : inout std_logic_vector(63 downto 0);
+        variable v_edge_pulse        : inout std_logic;
+        variable v_overflow_pulse    : inout std_logic;
+        variable v_freeze_drop_pulse : inout std_logic
     ) is
         variable n_atom_count  : unsigned(ATOM_NB_SIZE-1 downto 0);
         variable addr_extended : unsigned(63 downto 0);
     begin
-        if atom_valid = '1' and v_fifo_count < FIFO_DEPTH then
-            v_edge_pulse := '1';
-            -- Add the number of N elements to the address
-            n_atom_count := count_n_atoms(atom_elts, atom_nb);
-            addr_extended := unsigned(addr) + n_atom_count;
-            -- Compute the index by XORing the address to the previous slice
-            v_index := std_logic_vector(addr_extended xor unsigned(v_prev_slice));
-            -- Update the previous slice with the new address >> 1
-            v_prev_slice := std_logic_vector(shift_right(addr_extended, 1));
-            -- Update FIFO
-            v_fifo(v_fifo_wr_ptr) := v_index;
-            v_fifo_wr_ptr := (v_fifo_wr_ptr + 1) mod FIFO_DEPTH;
-            v_fifo_count  := v_fifo_count + 1;
-        else -- FIFO full, edge dropped
-            v_overflow_pulse := '1';
+        if freeze_req = '1' then
+            if atom_valid = '1' then
+                v_freeze_drop_pulse := '1';
+            end if;
+        elsif atom_valid = '1' then
+            if v_fifo_count < FIFO_DEPTH then
+                v_edge_pulse := '1';
+                -- Add the number of N elements to the address
+                n_atom_count := count_n_atoms(atom_elts, atom_nb);
+                addr_extended := unsigned(addr) + n_atom_count;
+                -- Compute the index by XORing the address to the previous slice
+                v_index := std_logic_vector(addr_extended xor unsigned(v_prev_slice));
+                -- Update the previous slice with the new address >> 1
+                v_prev_slice := std_logic_vector(shift_right(addr_extended, 1));
+                -- Update FIFO
+                v_fifo(v_fifo_wr_ptr) := v_index;
+                v_fifo_wr_ptr := (v_fifo_wr_ptr + 1) mod FIFO_DEPTH;
+                v_fifo_count  := v_fifo_count + 1;
+            else -- FIFO full, edge dropped
+                v_overflow_pulse := '1';
+            end if;
         end if;
     end procedure;
 
@@ -171,23 +182,38 @@ architecture Behavioral of edge_extractor is
     signal aw_seen          : std_logic := '0';
 
     -- Stats
-    signal edges_total         : std_logic_vector(31 downto 0) := (others => '0'); -- owned by axi-lite
-    signal edge_pulse          : std_logic := '0'; -- owned by process_atom
-
-    signal fifo_overflow_count : std_logic_vector(31 downto 0) := (others => '0'); -- owned by axi-lite
-    signal overflow_pulse      : std_logic := '0'; -- owned by process_atom
+    -- owned by process_atom
+    signal edge_pulse          : std_logic := '0';
+    signal overflow_pulse      : std_logic := '0';
+    signal freeze_drop_pulse   : std_logic := '0';
+    -- owned by axi-lite
+    signal edges_total         : std_logic_vector(31 downto 0) := (others => '0');
+    signal fifo_overflow_count : std_logic_vector(31 downto 0) := (others => '0');
+    signal freeze_drop_count   : std_logic_vector(31 downto 0) := (others => '0');
 
 begin
 
+    -- AXI4-Lite
+    s_axi_awready <= awready;
+    s_axi_wready  <= wready;
+    s_axi_bvalid  <= bvalid;
+    s_axi_bresp   <= bresp;
+
+    s_axi_arready <= arready;
+    s_axi_rvalid  <= rvalid;
+    s_axi_rresp   <= rresp;
+
+
     process_packet: process(aclk)
-        variable v_prev_slice     : std_logic_vector(63 downto 0);
-        variable v_fifo           : fifo_t;
-        variable v_fifo_wr_ptr    : integer range 0 to FIFO_DEPTH-1;
-        variable v_fifo_rd_ptr    : integer range 0 to FIFO_DEPTH-1;
-        variable v_fifo_count     : integer range 0 to FIFO_DEPTH;
-        variable v_index          : std_logic_vector(63 downto 0);
-        variable v_edge_pulse     : std_logic;
-        variable v_overflow_pulse : std_logic;
+        variable v_prev_slice        : std_logic_vector(63 downto 0);
+        variable v_fifo              : fifo_t;
+        variable v_fifo_wr_ptr       : integer range 0 to FIFO_DEPTH-1;
+        variable v_fifo_rd_ptr       : integer range 0 to FIFO_DEPTH-1;
+        variable v_fifo_count        : integer range 0 to FIFO_DEPTH;
+        variable v_index             : std_logic_vector(63 downto 0);
+        variable v_edge_pulse        : std_logic;
+        variable v_overflow_pulse    : std_logic;
+        variable v_freeze_drop_pulse : std_logic;
     begin
         if rising_edge(aclk) then
             if aresetn = '0' then
@@ -208,6 +234,10 @@ begin
                 v_fifo_rd_ptr := 0;
                 v_fifo_count  := 0;
                 v_index       := (others=>'0');
+
+                v_edge_pulse        := '0';
+                v_overflow_pulse    := '0';
+                v_freeze_drop_pulse := '0';
             else
 
                 v_fifo        := fifo;
@@ -216,22 +246,23 @@ begin
                 v_fifo_count  := fifo_count;
                 v_prev_slice  := prev_slice;
 
-                v_edge_pulse     := '0';
-                v_overflow_pulse := '0';
+                v_edge_pulse        := '0';
+                v_overflow_pulse    := '0';
+                v_freeze_drop_pulse := '0';
 
                 -- Sequentially process ports 0..3
-                process_atom(i_atom_valid0, i_address_reg_0_0, i_atom_elements0, i_atom_nb0,
+                process_atom(i_atom_valid0, i_address_reg_0_0, i_atom_elements0, i_atom_nb0, i_freeze_request,
                              v_prev_slice, v_fifo, v_fifo_wr_ptr, v_fifo_count, v_index,
-                             v_edge_pulse, v_overflow_pulse);
-                process_atom(i_atom_valid1, i_address_reg_0_1, i_atom_elements1, i_atom_nb1,
+                             v_edge_pulse, v_overflow_pulse, v_freeze_drop_pulse);
+                process_atom(i_atom_valid1, i_address_reg_0_1, i_atom_elements1, i_atom_nb1, i_freeze_request,
                              v_prev_slice, v_fifo, v_fifo_wr_ptr, v_fifo_count, v_index,
-                             v_edge_pulse, v_overflow_pulse);
-                process_atom(i_atom_valid2, i_address_reg_0_2, i_atom_elements2, i_atom_nb2,
+                             v_edge_pulse, v_overflow_pulse, v_freeze_drop_pulse);
+                process_atom(i_atom_valid2, i_address_reg_0_2, i_atom_elements2, i_atom_nb2, i_freeze_request,
                              v_prev_slice, v_fifo, v_fifo_wr_ptr, v_fifo_count, v_index,
-                             v_edge_pulse, v_overflow_pulse);
-                process_atom(i_atom_valid3, i_address_reg_0_3, i_atom_elements3, i_atom_nb3,
+                             v_edge_pulse, v_overflow_pulse, v_freeze_drop_pulse);
+                process_atom(i_atom_valid3, i_address_reg_0_3, i_atom_elements3, i_atom_nb3, i_freeze_request,
                              v_prev_slice, v_fifo, v_fifo_wr_ptr, v_fifo_count, v_index,
-                             v_edge_pulse, v_overflow_pulse);
+                             v_edge_pulse, v_overflow_pulse, v_freeze_drop_pulse);
 
                 -- Output FIFO to downstream
                 if v_fifo_count > 0 and i_ready = '1' then
@@ -258,8 +289,9 @@ begin
                 fifo_count  <= v_fifo_count;
                 prev_slice  <= v_prev_slice;
 
-                edge_pulse     <= v_edge_pulse;
-                overflow_pulse <= v_overflow_pulse;
+                edge_pulse        <= v_edge_pulse;
+                overflow_pulse    <= v_overflow_pulse;
+                freeze_drop_pulse <= v_freeze_drop_pulse;
 
             end if;
         end if;
@@ -274,11 +306,18 @@ begin
                 bvalid           <= '0';
                 arready          <= '0';
                 rvalid           <= '0';
+
+                awaddr_reg       <= (others => '0');
+                araddr_reg       <= (others => '0');
+                wdata_reg        <= (others => '0');
+                s_axi_rdata      <= (others => '0');
+
                 aw_seen          <= '0';
                 w_seen           <= '0';
                 read_in_progress <= '0';
                 edges_total         <= (others => '0');
                 fifo_overflow_count <= (others => '0');
+                freeze_drop_count   <= (others => '0');
             else
                 -- Saturating counters
                 if edge_pulse = '1' then
@@ -290,6 +329,12 @@ begin
                 if overflow_pulse = '1' then
                     if fifo_overflow_count /= x"FFFFFFFF" then
                         fifo_overflow_count <= std_logic_vector(unsigned(fifo_overflow_count) + 1);
+                    end if;
+                end if;
+
+                if freeze_drop_pulse = '1' then
+                    if freeze_drop_count /= x"FFFFFFFF" then
+                        freeze_drop_count <= std_logic_vector(unsigned(freeze_drop_count) + 1);
                     end if;
                 end if;
 
@@ -317,11 +362,12 @@ begin
 
                     case awaddr_reg is
                         -- 0x00: Control register
-                        --   bit 0 = stats_reset: clear edges_total and fifo_overflow_count
+                        --   bit 0 = stats_reset: clear edges_total, fifo_overflow_count and freeze_drop_count
                         when x"00" =>
                             if wdata_reg(0) = '1' then
                                 edges_total         <= (others => '0');
                                 fifo_overflow_count <= (others => '0');
+                                freeze_drop_count   <= (others => '0');
                             end if;
                         when others => null;
                     end case;
@@ -356,6 +402,11 @@ begin
                         --   32-bit saturating count of edges dropped due to FIFO full
                         when x"04" =>
                             s_axi_rdata <= fifo_overflow_count;
+
+                        -- 0x08: freeze_drop_count
+                        --   32-bit saturating count of edges dropped due to freeze request
+                        when x"08" =>
+                            s_axi_rdata <= freeze_drop_count;
 
                         when others =>
                             s_axi_rdata <= (others => '0');

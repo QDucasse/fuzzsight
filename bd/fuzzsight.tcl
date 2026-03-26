@@ -1679,7 +1679,7 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
   connect_bd_net -net bitmap_reader_bram_0_bram_we  [get_bd_pins bitmap_reader_bram_0/bram_we] \
   [get_bd_pins blk_mem_gen_0/web]
   connect_bd_net -net bitmap_reader_bram_0_o_fifo_freeze_req  [get_bd_pins bitmap_reader_bram_0/o_fifo_freeze_req] \
-  [get_bd_pins bitmap_writer_bram_0/i_fifo_freeze_req]
+  [get_bd_pins edge_extractor_0/i_freeze_request]
   connect_bd_net -net bitmap_writer_bram_0_bram_addr  [get_bd_pins bitmap_writer_bram_0/bram_addr] \
   [get_bd_pins blk_mem_gen_0/addra]
   connect_bd_net -net bitmap_writer_bram_0_bram_din  [get_bd_pins bitmap_writer_bram_0/bram_din] \
@@ -1695,53 +1695,53 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
   connect_bd_net -net blk_mem_gen_0_doutb  [get_bd_pins blk_mem_gen_0/doutb] \
   [get_bd_pins bitmap_reader_bram_0/bram_dout]
   connect_bd_net -net decoder_o_address_reg_0_0  [get_bd_pins decoder/o_address_reg_0_0] \
-  [get_bd_pins edge_extractor_0/i_address_reg_0_0] \
-  [get_bd_pins decoder_stats_lut_0/i_address_reg_0_0]
+  [get_bd_pins decoder_stats_lut_0/i_address_reg_0_0] \
+  [get_bd_pins edge_extractor_0/i_address_reg_0_0]
   connect_bd_net -net decoder_o_address_reg_0_1  [get_bd_pins decoder/o_address_reg_0_1] \
-  [get_bd_pins edge_extractor_0/i_address_reg_0_1] \
-  [get_bd_pins decoder_stats_lut_0/i_address_reg_0_1]
+  [get_bd_pins decoder_stats_lut_0/i_address_reg_0_1] \
+  [get_bd_pins edge_extractor_0/i_address_reg_0_1]
   connect_bd_net -net decoder_o_address_reg_0_2  [get_bd_pins decoder/o_address_reg_0_2] \
-  [get_bd_pins edge_extractor_0/i_address_reg_0_2] \
-  [get_bd_pins decoder_stats_lut_0/i_address_reg_0_2]
+  [get_bd_pins decoder_stats_lut_0/i_address_reg_0_2] \
+  [get_bd_pins edge_extractor_0/i_address_reg_0_2]
   connect_bd_net -net decoder_o_address_reg_0_3  [get_bd_pins decoder/o_address_reg_0_3] \
-  [get_bd_pins edge_extractor_0/i_address_reg_0_3] \
-  [get_bd_pins decoder_stats_lut_0/i_address_reg_0_3]
+  [get_bd_pins decoder_stats_lut_0/i_address_reg_0_3] \
+  [get_bd_pins edge_extractor_0/i_address_reg_0_3]
   connect_bd_net -net decoder_o_atom_elements0  [get_bd_pins decoder/o_atom_elements0] \
-  [get_bd_pins edge_extractor_0/i_atom_elements0] \
-  [get_bd_pins decoder_stats_lut_0/i_atom_elements0]
+  [get_bd_pins decoder_stats_lut_0/i_atom_elements0] \
+  [get_bd_pins edge_extractor_0/i_atom_elements0]
   connect_bd_net -net decoder_o_atom_elements1  [get_bd_pins decoder/o_atom_elements1] \
-  [get_bd_pins edge_extractor_0/i_atom_elements1] \
-  [get_bd_pins decoder_stats_lut_0/i_atom_elements1]
+  [get_bd_pins decoder_stats_lut_0/i_atom_elements1] \
+  [get_bd_pins edge_extractor_0/i_atom_elements1]
   connect_bd_net -net decoder_o_atom_elements2  [get_bd_pins decoder/o_atom_elements2] \
-  [get_bd_pins edge_extractor_0/i_atom_elements2] \
-  [get_bd_pins decoder_stats_lut_0/i_atom_elements2]
+  [get_bd_pins decoder_stats_lut_0/i_atom_elements2] \
+  [get_bd_pins edge_extractor_0/i_atom_elements2]
   connect_bd_net -net decoder_o_atom_elements3  [get_bd_pins decoder/o_atom_elements3] \
-  [get_bd_pins edge_extractor_0/i_atom_elements3] \
-  [get_bd_pins decoder_stats_lut_0/i_atom_elements3]
+  [get_bd_pins decoder_stats_lut_0/i_atom_elements3] \
+  [get_bd_pins edge_extractor_0/i_atom_elements3]
   connect_bd_net -net decoder_o_atom_nb0  [get_bd_pins decoder/o_atom_nb0] \
-  [get_bd_pins edge_extractor_0/i_atom_nb0] \
-  [get_bd_pins decoder_stats_lut_0/i_atom_nb0]
+  [get_bd_pins decoder_stats_lut_0/i_atom_nb0] \
+  [get_bd_pins edge_extractor_0/i_atom_nb0]
   connect_bd_net -net decoder_o_atom_nb1  [get_bd_pins decoder/o_atom_nb1] \
-  [get_bd_pins edge_extractor_0/i_atom_nb1] \
-  [get_bd_pins decoder_stats_lut_0/i_atom_nb1]
+  [get_bd_pins decoder_stats_lut_0/i_atom_nb1] \
+  [get_bd_pins edge_extractor_0/i_atom_nb1]
   connect_bd_net -net decoder_o_atom_nb2  [get_bd_pins decoder/o_atom_nb2] \
-  [get_bd_pins edge_extractor_0/i_atom_nb2] \
-  [get_bd_pins decoder_stats_lut_0/i_atom_nb2]
+  [get_bd_pins decoder_stats_lut_0/i_atom_nb2] \
+  [get_bd_pins edge_extractor_0/i_atom_nb2]
   connect_bd_net -net decoder_o_atom_nb3  [get_bd_pins decoder/o_atom_nb3] \
-  [get_bd_pins edge_extractor_0/i_atom_nb3] \
-  [get_bd_pins decoder_stats_lut_0/i_atom_nb3]
+  [get_bd_pins decoder_stats_lut_0/i_atom_nb3] \
+  [get_bd_pins edge_extractor_0/i_atom_nb3]
   connect_bd_net -net decoder_o_atom_valid0  [get_bd_pins decoder/o_atom_valid0] \
-  [get_bd_pins edge_extractor_0/i_atom_valid0] \
-  [get_bd_pins decoder_stats_lut_0/i_atom_valid0]
+  [get_bd_pins decoder_stats_lut_0/i_atom_valid0] \
+  [get_bd_pins edge_extractor_0/i_atom_valid0]
   connect_bd_net -net decoder_o_atom_valid1  [get_bd_pins decoder/o_atom_valid1] \
-  [get_bd_pins edge_extractor_0/i_atom_valid1] \
-  [get_bd_pins decoder_stats_lut_0/i_atom_valid1]
+  [get_bd_pins decoder_stats_lut_0/i_atom_valid1] \
+  [get_bd_pins edge_extractor_0/i_atom_valid1]
   connect_bd_net -net decoder_o_atom_valid2  [get_bd_pins decoder/o_atom_valid2] \
-  [get_bd_pins edge_extractor_0/i_atom_valid2] \
-  [get_bd_pins decoder_stats_lut_0/i_atom_valid2]
+  [get_bd_pins decoder_stats_lut_0/i_atom_valid2] \
+  [get_bd_pins edge_extractor_0/i_atom_valid2]
   connect_bd_net -net decoder_o_atom_valid3  [get_bd_pins decoder/o_atom_valid3] \
-  [get_bd_pins edge_extractor_0/i_atom_valid3] \
-  [get_bd_pins decoder_stats_lut_0/i_atom_valid3]
+  [get_bd_pins decoder_stats_lut_0/i_atom_valid3] \
+  [get_bd_pins edge_extractor_0/i_atom_valid3]
   connect_bd_net -net edge_extractor_0_o_empty  [get_bd_pins edge_extractor_0/o_empty] \
   [get_bd_pins bitmap_reader_bram_0/i_fifo_empty]
   connect_bd_net -net edge_extractor_0_o_index  [get_bd_pins edge_extractor_0/o_index] \
@@ -1751,11 +1751,11 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
   connect_bd_net -net proc_sys_reset_0_peripheral_aresetn  [get_bd_pins proc_sys_reset_0/peripheral_aresetn] \
   [get_bd_pins axi_dma_0/axi_resetn] \
   [get_bd_pins axi_smc_1/aresetn] \
-  [get_bd_pins edge_extractor_0/aresetn] \
+  [get_bd_pins decoder/aresetn] \
   [get_bd_pins bitmap_reader_bram_0/aresetn] \
   [get_bd_pins bitmap_writer_bram_0/aresetn] \
-  [get_bd_pins decoder/aresetn] \
-  [get_bd_pins decoder_stats_lut_0/aresetn]
+  [get_bd_pins decoder_stats_lut_0/aresetn] \
+  [get_bd_pins edge_extractor_0/aresetn]
   connect_bd_net -net rst_zynq_ultra_ps_pl_250M_peripheral_aresetn  [get_bd_pins rst_zynq_ultra_ps_pl_250M/peripheral_aresetn] \
   [get_bd_pins axi_smc/aresetn]
   connect_bd_net -net zynq_ultra_ps_pl_pl_clk0  [get_bd_pins zynq_ultra_ps_pl/pl_clk0] \
@@ -1765,13 +1765,13 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
   [get_bd_pins axi_dma_0/m_axi_s2mm_aclk] \
   [get_bd_pins axi_smc/aclk1] \
   [get_bd_pins axi_smc_1/aclk] \
-  [get_bd_pins edge_extractor_0/aclk] \
   [get_bd_pins blk_mem_gen_0/clka] \
   [get_bd_pins blk_mem_gen_0/clkb] \
+  [get_bd_pins decoder/aclk] \
   [get_bd_pins bitmap_reader_bram_0/aclk] \
   [get_bd_pins bitmap_writer_bram_0/aclk] \
-  [get_bd_pins decoder/aclk] \
-  [get_bd_pins decoder_stats_lut_0/aclk]
+  [get_bd_pins decoder_stats_lut_0/aclk] \
+  [get_bd_pins edge_extractor_0/aclk]
   connect_bd_net -net zynq_ultra_ps_pl_pl_clk1  [get_bd_pins zynq_ultra_ps_pl/pl_clk1] \
   [get_bd_pins zynq_ultra_ps_pl/saxihp0_fpd_aclk] \
   [get_bd_pins zynq_ultra_ps_pl/maxihpm0_lpd_aclk] \

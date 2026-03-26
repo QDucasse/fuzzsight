@@ -486,6 +486,12 @@ begin
                 bvalid  <= '0';
                 arready <= '0';
                 rvalid  <= '0';
+
+                awaddr_reg       <= (others => '0');
+                araddr_reg       <= (others => '0');
+                wdata_reg        <= (others => '0');
+                s_axi_rdata      <= (others => '0');
+
                 aw_seen <= '0';
                 w_seen  <= '0';
                 read_in_progress <= '0';

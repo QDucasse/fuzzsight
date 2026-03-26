@@ -51,9 +51,15 @@ architecture Simulation of edge_extractor_tb is
         i_atom_elements3  : in std_logic_vector(ATOM_ELTS_SIZE-1 downto 0);
         i_atom_nb3        : in unsigned(ATOM_NB_SIZE-1 downto 0);
 
+        -- Freeze request
+        i_freeze_request  : in std_logic;
+
         -- Output edge index
         o_index   : out std_logic_vector(63 downto 0);
+
+        -- Output fifo info
         o_valid   : out std_logic;
+        o_empty   : out std_logic;
         i_ready   : in  std_logic;
 
         -- AXI4-Lite interface
@@ -184,27 +190,31 @@ architecture Simulation of edge_extractor_tb is
     signal atom_elements3  : std_logic_vector(ATOM_ELTS_SIZE-1 downto 0);
     signal atom_nb3        : unsigned(ATOM_NB_SIZE-1 downto 0);
 
+    -- Freeze request
+    signal freeze_request  : std_logic := '0';
+
     -- FIFO handshake
     signal index : std_logic_vector(63 downto 0);
     signal valid : std_logic;
+    signal empty : std_logic;
     signal ready : std_logic;
 
         -- AXI4-Lite signals
     signal axi_awaddr  : std_logic_vector(AXIL_WIDTH-1 downto 0) := (others=>'0');
     signal axi_awvalid : std_logic := '0';
-    signal axi_awready : std_logic;
+    signal axi_awready : std_logic := '0';
     signal axi_wdata   : std_logic_vector(31 downto 0) := (others=>'0');
     signal axi_wvalid  : std_logic := '0';
-    signal axi_wready  : std_logic;
+    signal axi_wready  : std_logic := '0';
     signal axi_bresp   : std_logic_vector(1 downto 0);
-    signal axi_bvalid  : std_logic;
+    signal axi_bvalid  : std_logic := '0';
     signal axi_bready  : std_logic := '1';
     signal axi_araddr  : std_logic_vector(AXIL_WIDTH-1 downto 0) := (others=>'0');
     signal axi_arvalid : std_logic := '0';
-    signal axi_arready : std_logic;
+    signal axi_arready : std_logic := '0';
     signal axi_rdata   : std_logic_vector(31 downto 0) := (others=>'0');
     signal axi_rresp   : std_logic_vector(1 downto 0);
-    signal axi_rvalid  : std_logic;
+    signal axi_rvalid  : std_logic := '0';
     signal axi_rready  : std_logic := '1';
 begin
     -- Clock and reset
@@ -241,9 +251,15 @@ begin
         i_atom_elements3  => atom_elements3,
         i_atom_nb3        => atom_nb3,
 
+        -- Freeze request
+        i_freeze_request  => freeze_request,
+
         -- Output edge index
         o_index => index,
+
+        -- Output fifo info
         o_valid => valid,
+        o_empty => empty,
         i_ready => ready,
 
         -- AXI4-Lite interface
@@ -296,8 +312,17 @@ begin
         atom_elements3   <= (others => '0');
         atom_nb3         <= (others => '0');
 
+        freeze_request   <= '0';
+        ready <= '0';
+
         -- wait for reset
         wait until reset = '1';
+
+        -----------------------------------------------------------------------
+        -- Test: Normal operations
+        -- Hold ready high and let several atom come
+
+        ready <= '1';
 
         -- Single atom packet on port 0
         atom_valid0     <= '1';
@@ -319,39 +344,77 @@ begin
         atom_elements2  <= "000000000000000000000101";
         atom_nb2        <= "00010";
 
-        wait for 4 ns;
+        wait until rising_edge(clock);
         atom_valid1 <= '0';
         atom_valid2 <= '0';
 
         -- Wait for existing edges to drain
         wait until rising_edge(clock);
+        wait until rising_edge(clock);
+        wait until rising_edge(clock);
+
+        -----------------------------------------------------------------------
+        -- Test: freeze_drop counter
+
+        freeze_request <= '1';
+        ready          <= '1';
+
+        for i in 0 to 3 loop
+            atom_valid0     <= '1';
+            address_reg_0_0 <= std_logic_vector(to_unsigned(i * 16#100#, 64));
+            atom_elements0  <= "000000000000000000000001";
+            atom_nb0        <= "00011";
+            wait until rising_edge(clock);
+        end loop;
+        atom_valid0    <= '0';
+        freeze_request <= '0';
+
+        wait until rising_edge(clock);
+
+        -- Read freeze_drop_count (0x08)
+        axi_lite_read(axi_araddr, axi_arvalid, axi_rdata, axi_arready,
+                    axi_rvalid, clock, x"08", status);
+
+        report "freeze_drop_count = " & integer'image(to_integer(unsigned(status)));
+        assert unsigned(status) = 4 report "Expected 4 freeze drops";
+
+        -- overflow should be zero since FIFO was empty and ready was high
+        axi_lite_read(axi_araddr, axi_arvalid, axi_rdata, axi_arready,
+                    axi_rvalid, clock, x"04", status);
+        assert status = x"00000000" report "overflow_count should be zero during freeze test";
+
 
         -----------------------------------------------------------------------
         -- Test: overflow the FIFO
         -- Hold ready low and fire all 4 ports for more cycles than FIFO_DEPTH
+
+        -- Reset stats leftover from freeze test
+        axi_lite_write(axi_awaddr, axi_awvalid, axi_wdata, axi_wvalid,
+               axi_awready, axi_wready, axi_bvalid, clock,
+               x"00", x"00000001");
 
         ready <= '0';
 
         for i in 0 to FIFO_DEPTH loop  -- one extra to guarantee overflow
             atom_valid0     <= '1';
             address_reg_0_0 <= std_logic_vector(to_unsigned(i * 16#100#, 64));
-            atom_elements0  <= (others => '1');  -- all E atoms, no N
-            atom_nb0        <= "00001";
+            atom_elements0  <= "000000000000000000000001";  -- NNE
+            atom_nb0        <= "00011";
 
             atom_valid1     <= '1';
             address_reg_0_1 <= std_logic_vector(to_unsigned(i * 16#200#, 64));
-            atom_elements1  <= (others => '1');
-            atom_nb1        <= "00001";
+            atom_elements1  <= "000000000000000000000001";
+            atom_nb1        <= "00011";
 
             atom_valid2     <= '1';
             address_reg_0_2 <= std_logic_vector(to_unsigned(i * 16#300#, 64));
-            atom_elements2  <= (others => '1');
-            atom_nb2        <= "00001";
+            atom_elements2  <= "000000000000000000000001";
+            atom_nb2        <= "00011";
 
             atom_valid3     <= '1';
             address_reg_0_3 <= std_logic_vector(to_unsigned(i * 16#400#, 64));
-            atom_elements3  <= (others => '1');
-            atom_nb3        <= "00001";
+            atom_elements3  <= "000000000000000000000001";
+            atom_nb3        <= "00011";
 
             wait until rising_edge(clock);
         end loop;
@@ -363,7 +426,7 @@ begin
 
         wait until rising_edge(clock);
 
-        -----------------------------------------------------------------------
+        --------------
         -- Read stats
 
         -- Read edges_total (0x00)

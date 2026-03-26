@@ -28,8 +28,6 @@ entity bitmap_writer_bram is
         i_fifo_valid     : in  std_logic;
         o_fifo_ready     : out std_logic;
 
-        i_fifo_freeze_req : in std_logic;
-
         -- BRAM interface
         bram_addr : out std_logic_vector(ADDR_WIDTH-1 downto 0);
         bram_din  : out std_logic_vector(7 downto 0);
@@ -54,7 +52,7 @@ architecture Behavioral of bitmap_writer_bram is
 
 begin
 
-    o_fifo_ready <= '1' when (state = IDLE and i_fifo_freeze_req = '0') else '0';
+    o_fifo_ready <= '1' when state = IDLE else '0';
 
     process(aclk)
         variable v_addr    : std_logic_vector(ADDR_WIDTH-1 downto 0);
@@ -75,7 +73,7 @@ begin
 
                     -- IDLE: waiting for a valid fifo input
                     when IDLE =>
-                        if i_fifo_valid = '1' and i_fifo_freeze_req = '0' then
+                        if i_fifo_valid = '1' then
                             v_addr := i_fifo_index(ADDR_WIDTH-1 downto 0);
                             latched_addr <= v_addr;
 
