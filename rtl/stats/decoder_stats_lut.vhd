@@ -243,11 +243,11 @@ architecture Behavioral of decoder_stats_lut is
         ),
         9 =>  ( -- 1001
             0 => (previous_burst_ended => '0', previous_gap_ended => '1',
-                  bursts_ended  => "0001", gaps_ended  => "0010",
+                  bursts_ended  => "0001", gaps_ended  => "0000",
                   inner_bursts  => "0000", inner_gaps  => "0010",
                   ongoing_burst => "0001", ongoing_gap => "0000"), -- prev_valid = 0
             1 => (previous_burst_ended => '0', previous_gap_ended => '0',
-                  bursts_ended  => "0001", gaps_ended  => "0010",
+                  bursts_ended  => "0001", gaps_ended  => "0000",
                   inner_bursts  => "0000", inner_gaps  => "0010",
                   ongoing_burst => "0001", ongoing_gap => "0000")  -- prev_valid = 1
         ),
@@ -370,6 +370,8 @@ architecture Behavioral of decoder_stats_lut is
     signal max_atom_gap_length     : unsigned(COUNTER_W-1 downto 0);
     signal sum_atom_gaps           : unsigned(COUNTER_W-1 downto 0);
 
+    signal has_seen_atom : std_logic;
+
     -- Current info
 
     signal packet_gap_length       : unsigned(COUNTER_W-1 downto 0);
@@ -402,7 +404,7 @@ architecture Behavioral of decoder_stats_lut is
 
 begin
     -- Valid atom vector
-    atom_valids       <= i_atom_valid3 & i_atom_valid2 & i_atom_valid1 & i_atom_valid0;
+    atom_valids       <= i_atom_valid0 & i_atom_valid1 & i_atom_valid2 & i_atom_valid3;
 
     -- Passthrough of the decoder info
     o_atom_valid0     <= i_atom_valid0;
@@ -553,6 +555,8 @@ begin
                 atom_gap_length         <= (others=>'0');
                 prev_atom_valid         <= 0;
 
+                has_seen_atom           <= '0';
+
                 v_atom_burst_count      := (others=>'0');
                 v_atom_burst_length     := (others=>'0');
                 v_min_atom_burst_length := (others=>'0');
@@ -646,6 +650,10 @@ begin
                 -- Update burst stats and reset accumulator
                 ----------------------------------------------------------------
                 if v_burst_event = '1' then
+                    -- Reset info for gaps
+                    has_seen_atom       <= '1';
+                    v_atom_gap_length   := (others => '0');
+                    -- Process burst
                     v_atom_burst_count := v_atom_burst_count + 1;
                     v_sum_atom_bursts  := v_sum_atom_bursts + v_new_burst_length;
 
@@ -663,7 +671,7 @@ begin
                 ----------------------------------------------------------------
                 -- Update gap stats and reset accumulator
                 ----------------------------------------------------------------
-                if v_gap_event = '1' then
+                if v_gap_event = '1' and has_seen_atom = '1' then
                     v_atom_gap_count := v_atom_gap_count + 1;
                     v_sum_atom_gaps  := v_sum_atom_gaps + v_new_gap_length;
 
@@ -692,12 +700,11 @@ begin
                 ----------------------------------------------------------------
                 -- Update prev_atom_valid state
                 ----------------------------------------------------------------
-                if atom_valids(3) = '0' then
-                    prev_atom_valid <= 0;
-                else
+                if i_atom_valid3 = '1' then
                     prev_atom_valid <= 1;
+                else
+                    prev_atom_valid <= 0;
                 end if;
-
                 ----------------------------------------------------------------
                 -- Commit back to signals
                 ----------------------------------------------------------------
