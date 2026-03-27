@@ -1597,6 +1597,7 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
     CONFIG.c_include_mm2s {0} \
     CONFIG.c_include_s2mm {1} \
     CONFIG.c_include_sg {0} \
+    CONFIG.c_sg_length_width {26} \
   ] $axi_dma
 
 
