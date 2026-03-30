@@ -18,7 +18,7 @@ use work.decoder_constants.all;
 
 entity edge_extractor is
     generic (
-        FIFO_DEPTH : integer := 8;
+        FIFO_DEPTH : integer := 16;
         AXIL_WIDTH : integer := 8
     );
     port (
