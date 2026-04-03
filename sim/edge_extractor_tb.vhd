@@ -354,6 +354,14 @@ begin
         wait until rising_edge(clock);
         wait until rising_edge(clock);
 
+        -- After the drain waits in the normal operations test:
+        axi_lite_read(axi_araddr, axi_arvalid, axi_rdata, axi_arready,
+                    axi_rvalid, clock, x"04", status);
+        report "edges_total after normal ops = " & integer'image(to_integer(unsigned(status)));
+        assert unsigned(status) = 3
+            report "Expected 3 edges: 1 from port0, 2 from simultaneous ports 1+2" severity error;
+
+
         -----------------------------------------------------------------------
         -- Test: freeze_drop counter
 
