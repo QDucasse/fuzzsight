@@ -19,15 +19,24 @@ typedef enum {
     EDGE_STATS_FREEZE_DROP = 0x0C,  // freeze_drop_count
 } edge_stats_reg_t;
 
+/* Control register bits */
+#define EDGE_STATS_CTRL_STATS_RESET      (1 << 0)
+#define EDGE_STATS_CTRL_PREV_SLICE_RESET (1 << 1)
+
 typedef axi_regs_t edge_stats_t;
 
 /* Function mapping to axi_regs defaults */
 static inline int  edge_stats_open(edge_stats_t *handle)
     { return axi_regs_open(handle, EDGE_STATS_BASE,EDGE_STATS_MAP_SIZE); }
-static inline void dec_stats_close(edge_stats_t *handle)
+static inline void edge_stats_close(edge_stats_t *handle)
     { axi_regs_close(handle); }
 static inline void edge_stats_reset(edge_stats_t *handle)
-    { axi_regs_write(handle, EDGE_STATS_CTRL, 1); }
+    { axi_regs_write(handle, EDGE_STATS_CTRL, EDGE_STATS_CTRL_STATS_RESET); }
+static inline void edge_stats_reset_prev_slice(edge_stats_t *handle)
+    { axi_regs_write(handle, EDGE_STATS_CTRL, EDGE_STATS_CTRL_PREV_SLICE_RESET); }
+static inline void edge_stats_reset_all(edge_stats_t *handle)
+    { axi_regs_write(handle, EDGE_STATS_CTRL,
+                     EDGE_STATS_CTRL_STATS_RESET | EDGE_STATS_CTRL_PREV_SLICE_RESET); }
 static inline uint32_t edge_stats_read(edge_stats_t *handle, edge_stats_reg_t reg)
     { return axi_regs_read(handle, reg); }
 

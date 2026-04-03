@@ -18,7 +18,7 @@ use work.decoder_constants.all;
 
 entity edge_extractor is
     generic (
-        FIFO_DEPTH : integer := 16;
+        FIFO_DEPTH : integer := 32;
         AXIL_WIDTH : integer := 8
     );
     port (
@@ -156,6 +156,12 @@ architecture Behavioral of edge_extractor is
     -- Signals
     ---------------
 
+    -- prev_slice_reset handshake
+    signal prev_slice_reset_req_set : std_logic := '0'; -- driven by axi_lite_process
+    signal prev_slice_reset_req_clr : std_logic := '0'; -- driven by process_packet
+    signal prev_slice_reset_request : std_logic := '0'; -- driven by prev_slice_reset_req_process
+
+
     signal prev_slice : std_logic_vector(63 downto 0) := (others => '0');
     signal fifo        : fifo_t;
     signal fifo_wr_ptr : integer range 0 to FIFO_DEPTH-1 := 0;
@@ -204,6 +210,19 @@ begin
     s_axi_rresp   <= rresp;
 
 
+    prev_slice_reset_req_process: process(aclk)
+    begin
+        if rising_edge(aclk) then
+            if aresetn = '0' then
+                prev_slice_reset_request <= '0';
+            elsif prev_slice_reset_req_set ='1' then
+                prev_slice_reset_request <= '1';
+            elsif prev_slice_reset_req_clr ='1' then
+                prev_slice_reset_request <= '0';
+            end if;
+        end if;
+    end process;
+
     process_packet: process(aclk)
         variable v_prev_slice        : std_logic_vector(63 downto 0);
         variable v_fifo              : fifo_t;
@@ -249,6 +268,13 @@ begin
                 v_edge_pulse        := '0';
                 v_overflow_pulse    := '0';
                 v_freeze_drop_pulse := '0';
+
+                if prev_slice_reset_request = '1' then
+                    v_prev_slice             := (others => '0');
+                    prev_slice_reset_req_clr <= '1';
+                else
+                    prev_slice_reset_req_clr <= '0';
+                end if;
 
                 -- Sequentially process ports 0..3
                 process_atom(i_atom_valid0, i_address_reg_0_0, i_atom_elements0, i_atom_nb0, i_freeze_request,
@@ -319,6 +345,10 @@ begin
                 fifo_overflow_count <= (others => '0');
                 freeze_drop_count   <= (others => '0');
             else
+
+                -- Default
+                prev_slice_reset_req_set <= '0';
+
                 -- Saturating counters
                 if edge_pulse = '1' then
                     if edges_total /= x"FFFFFFFF" then
@@ -363,12 +393,14 @@ begin
                     case awaddr_reg is
                         -- 0x00: Control register
                         --   bit 0 = stats_reset: clear edges_total, fifo_overflow_count and freeze_drop_count
+                        --   bit 1 = prev_slice_reset: clear prev_slice
                         when x"00" =>
                             if wdata_reg(0) = '1' then
                                 edges_total         <= (others => '0');
                                 fifo_overflow_count <= (others => '0');
                                 freeze_drop_count   <= (others => '0');
                             end if;
+                            prev_slice_reset_req_set <= wdata_reg(1);
                         when others => null;
                     end case;
 

@@ -317,6 +317,7 @@ begin
 
         -- wait for reset
         wait until reset = '1';
+        wait until rising_edge(clock);
 
         -----------------------------------------------------------------------
         -- Test: Normal operations
@@ -330,13 +331,13 @@ begin
         atom_elements0  <= "000000000000000000000001"; -- first atom is E
         atom_nb0        <= "00001";                    -- 1 element
         ready           <= '1';
-        wait for 2 ns;
+        wait until rising_edge(clock);
         atom_valid0 <= '0';
 
         -- Simultaneous atoms on ports 1 and 2
         atom_valid1     <= '1';
         address_reg_0_1 <= x"0000000000000200";
-        atom_elements1  <= "000000000000000000000011";
+        atom_elements1  <= "000000000000000000000001";
         atom_nb1        <= "00010";
 
         atom_valid2     <= '1';
@@ -454,6 +455,57 @@ begin
         axi_lite_read(axi_araddr, axi_arvalid, axi_rdata, axi_arready,
                         axi_rvalid, clock, x"08", status);
         assert status = x"00000000" report "fifo_overflow_count not cleared after reset";
+
+        -----------------------------------------------------------------------
+        -- Test: prev_slice reset
+        -- Fire an atom, record the edge index, reset prev_slice, fire the
+        -- same atom again - should produce the same index as the first time
+
+        ready <= '1';
+
+        -- First atom
+        atom_valid0     <= '1';
+        address_reg_0_0 <= x"0000000000000ABC";
+        atom_elements0  <= "000000000000000000000001";
+        atom_nb0        <= "00001";
+        wait until rising_edge(clock);
+        atom_valid0 <= '0';
+
+        -- Capture the first edge index
+        wait until rising_edge(clock) and valid = '1';
+        report "first edge index = " & to_hstring(to_bitvector(index));
+
+        -- Fire a second atom to advance prev_slice
+        atom_valid0     <= '1';
+        address_reg_0_0 <= x"0000000000000DEF";
+        atom_elements0  <= "000000000000000000000001";
+        atom_nb0        <= "00001";
+        wait until rising_edge(clock);
+        atom_valid0 <= '0';
+
+        wait until rising_edge(clock);
+
+        -- Reset prev_slice via AXI write to 0x00 bit 1
+        axi_lite_write(axi_awaddr, axi_awvalid, axi_wdata, axi_wvalid,
+                    axi_awready, axi_wready, axi_bvalid, clock,
+                    x"00", x"00000002");
+
+        wait until rising_edge(clock);
+
+        -- Fire the same first atom again - should produce the same index as the first
+        atom_valid0     <= '1';
+        address_reg_0_0 <= x"0000000000000ABC";
+        atom_elements0  <= "000000000000000000000001";
+        atom_nb0        <= "00001";
+        wait until rising_edge(clock);
+        atom_valid0 <= '0';
+
+        -- Capture and compare
+        wait until rising_edge(clock) and valid = '1';
+        report "post-reset edge index = " & to_hstring(to_bitvector(index));
+        assert index = x"0000000000000ABC"
+            report "prev_slice reset failed: index should match first-ever edge" severity error;
+
 
         wait;
     end process;
