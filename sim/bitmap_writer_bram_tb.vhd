@@ -23,7 +23,6 @@ architecture Simulation of bitmap_writer_bram_tb is
         i_fifo_index      : in  std_logic_vector(63 downto 0);
         i_fifo_valid      : in  std_logic;
         o_fifo_ready      : out std_logic;
-        i_fifo_freeze_req : in  std_logic;
 
         bram_addr : out std_logic_vector(ADDR_WIDTH-1 downto 0);
         bram_din  : out std_logic_vector(7 downto 0);
@@ -41,7 +40,6 @@ architecture Simulation of bitmap_writer_bram_tb is
     signal fifo_index  : std_logic_vector(63 downto 0);
     signal fifo_valid  : std_logic;
     signal fifo_ready  : std_logic;
-    signal fifo_freeze_req  : std_logic := '0';
 
     -- BRAM signals
     signal bram_addr : std_logic_vector(ADDR_WIDTH-1 downto 0);
@@ -67,8 +65,6 @@ begin
         i_fifo_index => fifo_index,
         i_fifo_valid => fifo_valid,
         o_fifo_ready => fifo_ready,
-
-        i_fifo_freeze_req => fifo_freeze_req,
 
         -- BRAM interface
         bram_addr => bram_addr,
@@ -96,15 +92,13 @@ begin
         -- clear inputs
         fifo_valid <= '0';
         fifo_index <= (others => '0');
-        fifo_freeze_req <= '0';
 
         -- wait for reset
         wait until reset = '1';
         wait for 6 ns;
 
-        ----------------------------------------------------------------
-        -- Continuous stream, valid stays high between transactions
-        ----------------------------------------------------------------
+        -------------------------------------------------------------------------
+        -- Test 1: Continuous stream valid stays high
 
         -- 0x10 first hit
         fifo_index <= x"0000000000000010";
@@ -118,9 +112,7 @@ begin
         -- 0x10 x4 increments
         fifo_index <= x"0000000000000010";
         wait until rising_edge(clock) and fifo_ready = '1';
-        wait until rising_edge(clock) and fifo_ready = '1';
-        wait until rising_edge(clock) and fifo_ready = '1';
-        wait until rising_edge(clock) and fifo_ready = '1';
+
 
         -- 0x30 one hit
         fifo_index <= x"0000000000000030";
@@ -136,19 +128,48 @@ begin
         wait until rising_edge(clock) and fifo_ready = '1';
         wait until rising_edge(clock);
 
+        assert ram(16#10#) = std_logic_vector(to_unsigned(2, 8))
+            report "0x10: expected 2 got " & integer'image(to_integer(unsigned(ram(16#10#))));
+        assert ram(16#20#) = std_logic_vector(to_unsigned(2, 8))
+            report "0x20: expected 2 got " & integer'image(to_integer(unsigned(ram(16#20#))));
+        assert ram(16#30#) = std_logic_vector(to_unsigned(1, 8))
+            report "0x30: expected 1 got " & integer'image(to_integer(unsigned(ram(16#30#))));
 
-        ----------------------------------------------------------------
-        -- Freeze test
-        ----------------------------------------------------------------
-        fifo_freeze_req <= '1';
-        for i in 0 to 3 loop
-            fifo_index <= x"0000000000000030";
-            fifo_valid <= '1';
-            wait until rising_edge(clock);
-            fifo_valid <= '0';
-            wait until rising_edge(clock);
+        -------------------------------------------------------------------------
+        -- Test 2: forwarding by sending same address 3 times back-to-back
+
+        fifo_index <= x"0000000000000040";
+        fifo_valid <= '1';
+        wait until rising_edge(clock) and fifo_ready = '1';
+        wait until rising_edge(clock) and fifo_ready = '1';
+        wait until rising_edge(clock) and fifo_ready = '1';
+        fifo_valid <= '0';
+        wait until rising_edge(clock) and fifo_ready = '1';
+        wait until rising_edge(clock);
+
+        assert ram(16#40#) = std_logic_vector(to_unsigned(3, 8))
+            report "Forwarding test: 0x40 expected 3 got "
+                & integer'image(to_integer(unsigned(ram(16#40#))));
+
+        -------------------------------------------------------------------------
+        -- Test 3: saturation, pre-fill 254, send 3 hits, expect 255
+
+        fifo_index <= x"0000000000000050";
+        fifo_valid <= '1';
+        for i in 0 to 255 loop
+            wait until rising_edge(clock) and fifo_ready = '1';
         end loop;
-        fifo_freeze_req <= '0';
+
+        wait until rising_edge(clock) and fifo_ready = '1';
+        wait until rising_edge(clock) and fifo_ready = '1';
+        wait until rising_edge(clock) and fifo_ready = '1';
+        fifo_valid <= '0';
+        wait until rising_edge(clock) and fifo_ready = '1';
+        wait until rising_edge(clock);
+
+        assert ram(16#50#) = x"FF"
+            report "Saturation test: expected 255 got "
+                & integer'image(to_integer(unsigned(ram(16#50#))));
 
         wait;
     end process;
