@@ -41,6 +41,7 @@
 #define BITMAP_READER_STATUS        0x04
 #define STATUS_FIFO_EMPTY           (1 << 0)
 #define STATUS_DMA_DONE             (1 << 1)
+#define STATUS_DMA_BUSY             (1 << 2)
 
 #ifndef BITMAP_READER_BASE
 #pragma message("WARNING: BITMAP_READER_BASE not defined, using placeholder")

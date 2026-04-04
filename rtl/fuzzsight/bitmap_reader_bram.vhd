@@ -126,7 +126,7 @@ begin
 
     -- BRAM combinatorial
     -- Mux to use DMA or CLEAR process
-    bram_en   <= '1' when (dma_state = READING or (dma_state = STREAM and addr_reg < WORD_COUNT)) else '0';
+    bram_en   <= '1' when (dma_state = READING or (dma_state = STREAM and m_axis_tready = '1' and addr_reg < WORD_COUNT)) else '0';
     bram_addr <=  std_logic_vector(addr_reg);
 
     -- Clear needs to write 0s
@@ -154,6 +154,7 @@ begin
             if aresetn = '0' then
                 dma_busy       <= '0';
                 dma_done_pulse <= '0';
+                dma_req_clr    <= '0';
                 dma_state      <= IDLE;
                 tvalid         <= '0';
                 m_axis_tlast   <= '0';
@@ -245,14 +246,12 @@ begin
                 aw_seen          <= '0';
                 w_seen           <= '0';
                 read_in_progress <= '0';
+
+                dma_req_set      <= '0';
+                dma_done         <= '0';
             else
                 -- clear requests
                 dma_req_set   <= '0';
-
-                -- Sticky pulses, cleared on PS read of status register
-                if dma_done_pulse = '1' then
-                    dma_done <= '1';
-                end if;
 
                 ----------------------------------------------------------------
                 -- WRITE CHANNEL
@@ -336,6 +335,12 @@ begin
                 elsif rvalid = '1' and s_axi_rready = '1' then
                     rvalid           <= '0';
                     read_in_progress <= '0';
+                end if;
+
+                -- Sticky pulses, cleared on PS read of status register
+                -- Assigned last so it stays high if read in the same cycle
+                if dma_done_pulse = '1' then
+                    dma_done <= '1';
                 end if;
 
             end if;

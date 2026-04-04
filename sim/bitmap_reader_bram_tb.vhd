@@ -298,9 +298,13 @@ begin
 
         -- Collect and verify AXI-Stream output for the first inputs
         for i in 0 to WORD_COUNT-1 loop
-            wait until rising_edge(clock) and axis_tvalid = '1';
+            wait until rising_edge(clock) and axis_tvalid = '1' and axis_tready = '1';
             assert axis_tdata = std_logic_vector(to_unsigned(i + 1, 32))
                 report "Data mismatch at word " & integer'image(i);
+            -- Word must be zeroed in RAM by the time it has been consumed
+            assert ram(i) = x"00000000"
+                report "Word " & integer'image(i) & " not yet cleared at consumption";
+
             if i = WORD_COUNT-1 then
                 assert axis_tlast = '1' report "tlast not asserted on last word";
             else
@@ -335,10 +339,41 @@ begin
             axi_awready, axi_wready, axi_bvalid, clock, x"00", x"00000001");
 
         for i in 0 to WORD_COUNT-1 loop
-            wait until rising_edge(clock) and axis_tvalid = '1';
+            wait until rising_edge(clock) and axis_tvalid = '1' and axis_tready = '1';
             assert axis_tdata = x"00000000"
                 report "Clear failed at word " & integer'image(i)
                     & " got " & integer'image(to_integer(unsigned(axis_tdata)));
+        end loop;
+
+        -------------------------------------------------------------------------
+        -- Test 3: backpressure - tready deasserted mid-transfer
+
+        -- Refill RAM
+        for i in 0 to WORD_COUNT-1 loop
+            ram(i) := std_logic_vector(to_unsigned(i + 1, 32));
+        end loop;
+
+        axis_tready <= '0';  -- hold off downstream
+
+        axi_lite_write(axi_awaddr, axi_awvalid, axi_wdata, axi_wvalid,
+            axi_awready, axi_wready, axi_bvalid, clock, x"00", x"00000001");
+
+        -- Let a few cycles pass with tready low, then release
+        for i in 0 to 5 loop
+            wait until rising_edge(clock);
+        end loop;
+        axis_tready <= '1';
+        wait until rising_edge(clock);
+
+        -- Now collect and verify as normal
+        for i in 0 to WORD_COUNT-1 loop
+            wait until rising_edge(clock) and axis_tvalid = '1' and axis_tready = '1';
+            assert axis_tdata = std_logic_vector(to_unsigned(i + 1, 32))
+            report "Data mismatch at word " & integer'image(i)
+                & " expected " & integer'image(i + 1)
+                & " got " & integer'image(to_integer(unsigned(axis_tdata)));
+            assert ram(i) = x"00000000"
+                report "Backpressure test: word " & integer'image(i) & " not cleared";
         end loop;
 
         wait;
