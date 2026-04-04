@@ -41,6 +41,9 @@ architecture Simulation of bitmap_reader_bram_tb is
         i_fifo_empty      : in  std_logic;
         o_fifo_freeze_req : out std_logic;
 
+        -- Writer info
+        i_writer_idle : in  std_logic;
+
         -- BRAM interface
         bram_addr : out std_logic_vector(ADDR_WIDTH-1 downto 0);
         bram_din  : out std_logic_vector(31 downto 0);
@@ -165,6 +168,8 @@ architecture Simulation of bitmap_reader_bram_tb is
     signal fifo_empty : std_logic;
     signal fifo_freeze_req : std_logic := '0';
 
+    signal writer_idle : std_logic := '1';
+
     -- BRAM signals
     signal bram_addr : std_logic_vector(ADDR_WIDTH-1 downto 0);
     signal bram_din  : std_logic_vector(31 downto 0);
@@ -217,6 +222,9 @@ begin
         -- FIFO info
         i_fifo_empty      => fifo_empty,
         o_fifo_freeze_req => fifo_freeze_req,
+
+        -- Writer info
+        i_writer_idle => writer_idle,
 
         -- BRAM interface
         bram_addr => bram_addr,
@@ -374,6 +382,38 @@ begin
                 & " got " & integer'image(to_integer(unsigned(axis_tdata)));
             assert ram(i) = x"00000000"
                 report "Backpressure test: word " & integer'image(i) & " not cleared";
+        end loop;
+
+        -------------------------------------------------------------------------
+        -- Test 4: DMA does not start when writer is not idle
+
+        -- Refill RAM
+        for i in 0 to WORD_COUNT-1 loop
+            ram(i) := std_logic_vector(to_unsigned(i + 1, 32));
+        end loop;
+
+        axis_tready  <= '1';
+        writer_idle  <= '0';  -- simulate writer mid-transaction
+
+        axi_lite_write(axi_awaddr, axi_awvalid, axi_wdata, axi_wvalid,
+            axi_awready, axi_wready, axi_bvalid, clock, x"00", x"00000001");
+
+        -- Wait a few cycles, DMA should not have started
+        for i in 0 to 5 loop
+            wait until rising_edge(clock);
+        end loop;
+        assert axis_tvalid = '0'
+            report "Test 4: DMA started while writer not idle";
+
+        -- Release writer idle, DMA should now start
+        writer_idle <= '1';
+
+        for i in 0 to WORD_COUNT-1 loop
+            wait until rising_edge(clock) and axis_tvalid = '1' and axis_tready = '1';
+            assert axis_tdata = std_logic_vector(to_unsigned(i + 1, 32))
+                report "Test 4: data mismatch at word " & integer'image(i)
+                    & " expected " & integer'image(i + 1)
+                    & " got " & integer'image(to_integer(unsigned(axis_tdata)));
         end loop;
 
         wait;

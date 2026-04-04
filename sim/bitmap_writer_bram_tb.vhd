@@ -20,6 +20,8 @@ architecture Simulation of bitmap_writer_bram_tb is
         aclk        : in  std_logic;
         aresetn     : in  std_logic;
 
+        o_idle      : out std_logic;
+
         i_fifo_index      : in  std_logic_vector(63 downto 0);
         i_fifo_valid      : in  std_logic;
         o_fifo_ready      : out std_logic;
@@ -35,6 +37,9 @@ architecture Simulation of bitmap_writer_bram_tb is
     -- Clock and reset
     signal clock  : std_logic := '1';
     signal reset  : std_logic := '1';
+
+    -- Idle info
+    signal writer_idle : std_logic;
 
     -- FIFO signals
     signal fifo_index  : std_logic_vector(63 downto 0);
@@ -60,6 +65,9 @@ begin
     port map (
         aclk     => clock,
         aresetn  => reset,
+
+        -- Idle info
+        o_idle       => writer_idle,
 
         -- FIFO interface from edge extractor
         i_fifo_index => fifo_index,
@@ -170,6 +178,28 @@ begin
         assert ram(16#50#) = x"FF"
             report "Saturation test: expected 255 got "
                 & integer'image(to_integer(unsigned(ram(16#50#))));
+
+        -------------------------------------------------------------------------
+        -- Test 4: o_idle deasserts during transaction and reasserts only
+        -- after the BRAM write completes
+
+        fifo_index <= x"0000000000000060";
+        fifo_valid <= '1';
+        wait until rising_edge(clock) and fifo_ready = '1';
+        -- writer just accepted the entry, now in READING or WRITING
+        fifo_valid <= '0';
+
+        -- o_idle must be low while processing
+        assert writer_idle = '0'
+            report "Test 4: writer_idle should be low during transaction";
+
+        -- wait for idle
+        wait until rising_edge(clock) and writer_idle = '1';
+
+        -- BRAM must be written by now
+        assert ram(16#60#) = std_logic_vector(to_unsigned(1, 8))
+            report "Test 4: 0x60 expected 1 got "
+                & integer'image(to_integer(unsigned(ram(16#60#))));
 
         wait;
     end process;

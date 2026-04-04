@@ -23,6 +23,9 @@ entity bitmap_writer_bram is
         aclk      : in  std_logic;
         aresetn   : in  std_logic;
 
+        -- Idle signal for reader
+        o_idle           : out std_logic;
+
         -- FIFO interface from edge extractor
         i_fifo_index     : in  std_logic_vector(63 downto 0);
         i_fifo_valid     : in  std_logic;
@@ -53,6 +56,7 @@ architecture Behavioral of bitmap_writer_bram is
 begin
 
     o_fifo_ready <= '1' when state = IDLE else '0';
+    o_idle       <= '1' when state = IDLE else '0';
 
     process(aclk)
         variable v_addr    : std_logic_vector(ADDR_WIDTH-1 downto 0);

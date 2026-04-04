@@ -1694,6 +1694,8 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
   [get_bd_pins bram/wea]
   connect_bd_net -net bitmap_writer_bram_0_o_fifo_ready  [get_bd_pins bitmap_writer_bram/o_fifo_ready] \
   [get_bd_pins edge_extractor/i_ready]
+  connect_bd_net -net bitmap_writer_bram_o_idle  [get_bd_pins bitmap_writer_bram/o_idle] \
+  [get_bd_pins bitmap_reader_bram/i_writer_idle]
   connect_bd_net -net blk_mem_gen_0_douta  [get_bd_pins bram/douta] \
   [get_bd_pins bitmap_writer_bram/bram_dout]
   connect_bd_net -net blk_mem_gen_0_doutb  [get_bd_pins bram/doutb] \
@@ -1756,9 +1758,9 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
   [get_bd_pins axi_dma/axi_resetn] \
   [get_bd_pins axi_smc_1/aresetn] \
   [get_bd_pins decoder/aresetn] \
+  [get_bd_pins decoder_stats_lut/aresetn] \
   [get_bd_pins bitmap_reader_bram/aresetn] \
   [get_bd_pins bitmap_writer_bram/aresetn] \
-  [get_bd_pins decoder_stats_lut/aresetn] \
   [get_bd_pins edge_extractor/aresetn]
   connect_bd_net -net rst_zynq_ultra_ps_pl_250M_peripheral_aresetn  [get_bd_pins axi_lite_reset/peripheral_aresetn] \
   [get_bd_pins axi_smc/aresetn]
@@ -1772,9 +1774,9 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
   [get_bd_pins bram/clka] \
   [get_bd_pins bram/clkb] \
   [get_bd_pins decoder/aclk] \
+  [get_bd_pins decoder_stats_lut/aclk] \
   [get_bd_pins bitmap_reader_bram/aclk] \
   [get_bd_pins bitmap_writer_bram/aclk] \
-  [get_bd_pins decoder_stats_lut/aclk] \
   [get_bd_pins edge_extractor/aclk]
   connect_bd_net -net zynq_ultra_ps_pl_pl_clk1  [get_bd_pins zynq_ultra_ps_pl/pl_clk1] \
   [get_bd_pins zynq_ultra_ps_pl/saxihp0_fpd_aclk] \

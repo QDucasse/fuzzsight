@@ -16,6 +16,9 @@ entity bitmap_reader_bram is
         i_fifo_empty      : in  std_logic;
         o_fifo_freeze_req : out std_logic;
 
+        -- Writer info
+        i_writer_idle : in  std_logic;
+
         -- BRAM interface
         bram_addr : out std_logic_vector(ADDR_WIDTH-1 downto 0);
         bram_din  : out std_logic_vector(31 downto 0);
@@ -176,8 +179,8 @@ begin
                         m_axis_tlast <= '0';
                         addr_reg     <= (others => '0');
 
-                        -- Start if requested, no ongoing clear, and upstream fifo drained
-                        if dma_request = '1' and i_fifo_empty = '1' then
+                        -- Start if requested, no ongoing clear, upstream fifo drained, and writer idle
+                        if dma_request = '1' and i_fifo_empty = '1' and i_writer_idle = '1' then
                             dma_busy    <= '1';
                             dma_req_clr <= '1';
                             dma_state   <= READING;
