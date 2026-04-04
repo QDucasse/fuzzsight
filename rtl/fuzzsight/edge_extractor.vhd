@@ -237,10 +237,11 @@ begin
         if rising_edge(aclk) then
             if aresetn = '0' then
                 -- Signals
-                prev_slice  <= (others => '0');
-                fifo_wr_ptr <= 0;
-                fifo_rd_ptr <= 0;
-                fifo_count  <= 0;
+                prev_slice               <= (others => '0');
+                prev_slice_reset_req_clr <= '0';
+                fifo_wr_ptr              <= 0;
+                fifo_rd_ptr              <= 0;
+                fifo_count               <= 0;
 
                 -- Outputs
                 o_index     <= (others => '0');
@@ -344,6 +345,8 @@ begin
                 edges_total         <= (others => '0');
                 fifo_overflow_count <= (others => '0');
                 freeze_drop_count   <= (others => '0');
+
+                prev_slice_reset_req_set <= '0';
             else
 
                 -- Default
