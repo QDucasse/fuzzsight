@@ -26,6 +26,9 @@ entity bitmap_writer_bram is
         -- Idle signal for reader
         o_idle           : out std_logic;
 
+        -- Freeze request from reader
+        i_freeze_request : in  std_logic;
+
         -- FIFO interface from edge extractor
         i_fifo_index     : in  std_logic_vector(63 downto 0);
         i_fifo_valid     : in  std_logic;
@@ -47,6 +50,9 @@ architecture Behavioral of bitmap_writer_bram is
 
     -- Latched edge address from IDLE
     signal latched_addr : std_logic_vector(ADDR_WIDTH-1 downto 0);
+
+    -- Latched freeze request
+    signal latched_freeze_req : std_logic;
 
     -- Forwarding register
     signal fwd_valid : std_logic := '0';
@@ -72,6 +78,17 @@ begin
                 -- Defaults
                 bram_en <= '0';
                 bram_we <= '0';
+
+                -- Latch freeze req
+                latched_freeze_req <= i_freeze_request;
+
+                -- Falling edge of freeze request means a new exec - clear fwd
+                -- Safe to clear fwd here since writer is guaranteed idle at this point
+                -- (reader only deasserts freeze after DMA completes, which requires
+                -- writer_idle = '1' before starting).
+                if latched_freeze_req = '1' and i_freeze_request = '0' then
+                    fwd_valid <= '0';
+                end if;
 
                 case state is
 
