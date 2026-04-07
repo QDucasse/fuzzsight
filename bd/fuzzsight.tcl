@@ -1683,7 +1683,8 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
   connect_bd_net -net bitmap_reader_bram_0_bram_we  [get_bd_pins bitmap_reader_bram/bram_we] \
   [get_bd_pins bram/web]
   connect_bd_net -net bitmap_reader_bram_0_o_fifo_freeze_req  [get_bd_pins bitmap_reader_bram/o_fifo_freeze_req] \
-  [get_bd_pins edge_extractor/i_freeze_request]
+  [get_bd_pins edge_extractor/i_freeze_request] \
+  [get_bd_pins bitmap_writer_bram/i_freeze_request]
   connect_bd_net -net bitmap_writer_bram_0_bram_addr  [get_bd_pins bitmap_writer_bram/bram_addr] \
   [get_bd_pins bram/addra]
   connect_bd_net -net bitmap_writer_bram_0_bram_din  [get_bd_pins bitmap_writer_bram/bram_din] \

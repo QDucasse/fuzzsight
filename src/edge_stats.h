@@ -21,7 +21,6 @@ typedef enum {
 
 /* Control register bits */
 #define EDGE_STATS_CTRL_STATS_RESET      (1 << 0)
-#define EDGE_STATS_CTRL_PREV_SLICE_RESET (1 << 1)
 
 typedef axi_regs_t edge_stats_t;
 
@@ -32,11 +31,6 @@ static inline void edge_stats_close(edge_stats_t *handle)
     { axi_regs_close(handle); }
 static inline void edge_stats_reset(edge_stats_t *handle)
     { axi_regs_write(handle, EDGE_STATS_CTRL, EDGE_STATS_CTRL_STATS_RESET); }
-static inline void edge_stats_reset_prev_slice(edge_stats_t *handle)
-    { axi_regs_write(handle, EDGE_STATS_CTRL, EDGE_STATS_CTRL_PREV_SLICE_RESET); }
-static inline void edge_stats_reset_all(edge_stats_t *handle)
-    { axi_regs_write(handle, EDGE_STATS_CTRL,
-                     EDGE_STATS_CTRL_STATS_RESET | EDGE_STATS_CTRL_PREV_SLICE_RESET); }
 static inline uint32_t edge_stats_read(edge_stats_t *handle, edge_stats_reg_t reg)
     { return axi_regs_read(handle, reg); }
 

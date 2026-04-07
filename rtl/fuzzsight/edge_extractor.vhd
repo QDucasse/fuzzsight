@@ -156,17 +156,14 @@ architecture Behavioral of edge_extractor is
     -- Signals
     ---------------
 
-    -- prev_slice_reset handshake
-    signal prev_slice_reset_req_set : std_logic := '0'; -- driven by axi_lite_process
-    signal prev_slice_reset_req_clr : std_logic := '0'; -- driven by process_packet
-    signal prev_slice_reset_request : std_logic := '0'; -- driven by prev_slice_reset_req_process
-
-
-    signal prev_slice : std_logic_vector(63 downto 0) := (others => '0');
+    signal prev_slice  : std_logic_vector(63 downto 0) := (others => '0');
     signal fifo        : fifo_t;
     signal fifo_wr_ptr : integer range 0 to FIFO_DEPTH-1 := 0;
     signal fifo_rd_ptr : integer range 0 to FIFO_DEPTH-1 := 0;
     signal fifo_count  : integer range 0 to FIFO_DEPTH := 0;
+
+    -- Latched freeze request to detect falling edge
+    signal latched_freeze_req : std_logic := '0';
 
     -- AXI4-Lite signals
     signal awready : std_logic := '0';
@@ -209,19 +206,10 @@ begin
     s_axi_rvalid  <= rvalid;
     s_axi_rresp   <= rresp;
 
-
-    prev_slice_reset_req_process: process(aclk)
-    begin
-        if rising_edge(aclk) then
-            if aresetn = '0' then
-                prev_slice_reset_request <= '0';
-            elsif prev_slice_reset_req_set ='1' then
-                prev_slice_reset_request <= '1';
-            elsif prev_slice_reset_req_clr ='1' then
-                prev_slice_reset_request <= '0';
-            end if;
-        end if;
-    end process;
+    -- Combinatorial FIFO output ? writer sees data same cycle it asserts i_ready
+    o_valid <= '1' when fifo_count > 0 else '0';
+    o_index <= fifo(fifo_rd_ptr) when fifo_count > 0 else (others => '0');
+    o_empty <= '1' when fifo_count = 0 else '0';
 
     process_packet: process(aclk)
         variable v_prev_slice        : std_logic_vector(63 downto 0);
@@ -237,16 +225,10 @@ begin
         if rising_edge(aclk) then
             if aresetn = '0' then
                 -- Signals
-                prev_slice               <= (others => '0');
-                prev_slice_reset_req_clr <= '0';
-                fifo_wr_ptr              <= 0;
-                fifo_rd_ptr              <= 0;
-                fifo_count               <= 0;
-
-                -- Outputs
-                o_index     <= (others => '0');
-                o_valid     <= '0';
-                o_empty     <= '1';
+                prev_slice  <= (others => '0');
+                fifo_wr_ptr <= 0;
+                fifo_rd_ptr <= 0;
+                fifo_count  <= 0;
 
                 -- Variables
                 v_prev_slice  := (others=>'0');
@@ -259,7 +241,7 @@ begin
                 v_overflow_pulse    := '0';
                 v_freeze_drop_pulse := '0';
             else
-
+                -- Variables assignments
                 v_fifo        := fifo;
                 v_fifo_wr_ptr := fifo_wr_ptr;
                 v_fifo_rd_ptr := fifo_rd_ptr;
@@ -270,11 +252,12 @@ begin
                 v_overflow_pulse    := '0';
                 v_freeze_drop_pulse := '0';
 
-                if prev_slice_reset_request = '1' then
-                    v_prev_slice             := (others => '0');
-                    prev_slice_reset_req_clr <= '1';
-                else
-                    prev_slice_reset_req_clr <= '0';
+                -- Latch freeze request
+                latched_freeze_req <= i_freeze_request;
+
+                -- Reset prev_slice on falling edge of freeze_request
+                if latched_freeze_req = '1' and i_freeze_request = '0' then
+                    v_prev_slice := (others => '0');
                 end if;
 
                 -- Sequentially process ports 0..3
@@ -291,22 +274,10 @@ begin
                              v_prev_slice, v_fifo, v_fifo_wr_ptr, v_fifo_count, v_index,
                              v_edge_count, v_overflow_pulse, v_freeze_drop_pulse);
 
-                -- Output FIFO to downstream
-                if v_fifo_count > 0 and i_ready = '1' then
-                    o_index <= v_fifo(v_fifo_rd_ptr);
-                    o_valid <= '1';
-                    -- Update read pointer/count
+                -- Advance read pointer when downstream consumes
+                if fifo_count > 0 and i_ready = '1' then
                     v_fifo_rd_ptr := (v_fifo_rd_ptr + 1) mod FIFO_DEPTH;
                     v_fifo_count  := v_fifo_count - 1;
-                else
-                    o_valid <= '0';
-                end if;
-
-                -- Update empty flag
-                if v_fifo_count = 0 then
-                    o_empty <= '1';
-                else
-                    o_empty <= '0';
                 end if;
 
                 -- Commit variables to the signals
@@ -345,12 +316,7 @@ begin
                 edges_total         <= (others => '0');
                 fifo_overflow_count <= (others => '0');
                 freeze_drop_count   <= (others => '0');
-
-                prev_slice_reset_req_set <= '0';
             else
-
-                -- Default
-                prev_slice_reset_req_set <= '0';
 
                 -- Saturating counters
                 if edge_count > 0 then
@@ -398,14 +364,12 @@ begin
                     case awaddr_reg is
                         -- 0x00: Control register
                         --   bit 0 = stats_reset: clear edges_total, fifo_overflow_count and freeze_drop_count
-                        --   bit 1 = prev_slice_reset: clear prev_slice
                         when x"00" =>
                             if wdata_reg(0) = '1' then
                                 edges_total         <= (others => '0');
                                 fifo_overflow_count <= (others => '0');
                                 freeze_drop_count   <= (others => '0');
                             end if;
-                            prev_slice_reset_req_set <= wdata_reg(1);
                         when others => null;
                     end case;
 

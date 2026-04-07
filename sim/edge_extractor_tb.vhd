@@ -320,7 +320,7 @@ begin
         wait until rising_edge(clock);
 
         -----------------------------------------------------------------------
-        -- Test: Normal operations
+        -- Test 1: Normal operations
         -- Hold ready high and let several atom come
 
         ready <= '1';
@@ -493,11 +493,11 @@ begin
 
         wait until rising_edge(clock);
 
-        -- Reset prev_slice via AXI write to 0x00 bit 1
-        axi_lite_write(axi_awaddr, axi_awvalid, axi_wdata, axi_wvalid,
-                    axi_awready, axi_wready, axi_bvalid, clock,
-                    x"00", x"00000002");
+        -- Reset prev_slice by setting freeze request
+        freeze_request <= '1';
+        wait until rising_edge(clock);
 
+        freeze_request <= '0';
         wait until rising_edge(clock);
 
         -- Fire the same first atom again - should produce the same index as the first
