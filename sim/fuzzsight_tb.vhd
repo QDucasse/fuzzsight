@@ -56,6 +56,8 @@ architecture Simulation of fuzzsight_tb is
             i_atom_elements3  : in std_logic_vector(ATOM_ELTS_SIZE-1 downto 0);
             i_atom_nb3        : in unsigned(ATOM_NB_SIZE-1 downto 0);
 
+            i_freeze_request  : in std_logic;
+
             o_index   : out std_logic_vector(63 downto 0);
             o_valid   : out std_logic;
             o_empty   : out std_logic;
@@ -88,10 +90,12 @@ architecture Simulation of fuzzsight_tb is
             aclk    : in  std_logic;
             aresetn : in  std_logic;
 
+            o_idle            : out std_logic;
+            i_freeze_request  : in  std_logic;
+
             i_fifo_index      : in  std_logic_vector(63 downto 0);
             i_fifo_valid      : in  std_logic;
             o_fifo_ready      : out std_logic;
-            i_fifo_freeze_req : in  std_logic;
 
             bram_addr : out std_logic_vector(ADDR_WIDTH-1 downto 0);
             bram_din  : out std_logic_vector(7 downto 0);
@@ -113,6 +117,8 @@ architecture Simulation of fuzzsight_tb is
 
             i_fifo_empty      : in  std_logic;
             o_fifo_freeze_req : out std_logic;
+
+            i_writer_idle : in  std_logic;
 
             bram_addr : out std_logic_vector(ADDR_WIDTH-1 downto 0);
             bram_din  : out std_logic_vector(31 downto 0);
@@ -245,8 +251,10 @@ architecture Simulation of fuzzsight_tb is
     signal edge_ready    : std_logic;
     signal edge_empty    : std_logic;
 
-    -- Freeze request: reader -> writer
-    signal freeze_req    : std_logic;
+    -- Freeze request: reader -> writer and extractor
+    signal freeze_req    : std_logic := '0';
+
+    signal writer_idle   : std_logic := '0';
 
     -- BRAM port A (writer, 8-bit)
     signal bram_addr_a   : std_logic_vector(ADDR_WIDTH-1 downto 0);
@@ -345,6 +353,8 @@ begin
             i_atom_elements3  => atom_elements3,
             i_atom_nb3        => atom_nb3,
 
+            i_freeze_request => freeze_req,
+
             o_index => edge_index,
             o_valid => edge_valid,
             o_empty => edge_empty,
@@ -379,7 +389,8 @@ begin
             i_fifo_index      => edge_index,
             i_fifo_valid      => edge_valid,
             o_fifo_ready      => edge_ready,
-            i_fifo_freeze_req => freeze_req,
+            o_idle            => writer_idle,
+            i_freeze_request  => freeze_req,
 
             bram_addr => bram_addr_a,
             bram_din  => bram_din_a,
@@ -400,6 +411,7 @@ begin
 
             i_fifo_empty      => edge_empty,
             o_fifo_freeze_req => freeze_req,
+            i_writer_idle     => writer_idle,
 
             bram_addr => bram_addr_b,
             bram_din  => bram_din_b,
@@ -474,6 +486,7 @@ begin
         variable status      : std_logic_vector(31 downto 0);
         variable dma_data    : std_logic_vector(AXIS_WIDTH-1 downto 0);
         variable non_zero    : boolean;
+        variable byte_sum    : integer;
     begin
         wait until reset = '1';
         wait until rising_edge(clock);
@@ -484,7 +497,7 @@ begin
 
         -- Port 0: single E atom at address 0x100
         atom_valid0     <= '1';
-        address_reg_0_0 <= x"0000000000000100";
+        address_reg_0_0 <= x"0000000000000004";
         atom_elements0  <= (others => '1');  -- all E, no N atoms
         atom_nb0        <= "00001";
         wait until rising_edge(clock);
@@ -492,7 +505,7 @@ begin
 
         -- Port 0: single E atom at address 0x200
         atom_valid0     <= '1';
-        address_reg_0_0 <= x"0000000000000200";
+        address_reg_0_0 <= x"0000000000000008";
         atom_elements0  <= (others => '1');
         atom_nb0        <= "00001";
         wait until rising_edge(clock);
@@ -500,22 +513,35 @@ begin
 
         -- Port 0 and 1 simultaneously
         atom_valid0     <= '1';
-        address_reg_0_0 <= x"0000000000000300";
+        address_reg_0_0 <= x"000000000000000c";
         atom_elements0  <= (others => '1');
         atom_nb0        <= "00001";
 
         atom_valid1     <= '1';
-        address_reg_0_1 <= x"0000000000000400";
+        address_reg_0_1 <= x"0000000000000010";
         atom_elements1  <= (others => '1');
         atom_nb1        <= "00001";
         wait until rising_edge(clock);
         atom_valid0 <= '0';
         atom_valid1 <= '0';
 
+        wait until writer_idle = '0';
+
         -- Wait a few cycles for the writer to process and write to BRAM
-        for i in 0 to 7 loop
+        loop
             wait until rising_edge(clock);
+            exit when writer_idle = '1' and edge_empty = '1';
         end loop;
+
+        -- After the writer_idle loop, directly inspect bram_byte
+        assert bram_byte(4)  = x"01" report "Test 1 FAIL: byte 4 expected 1 got " &
+                                integer'image(to_integer(unsigned(bram_byte(4))));
+        assert bram_byte(8)  = x"01" report "Test 1 FAIL: byte 8  expected 1 got " &
+                                integer'image(to_integer(unsigned(bram_byte(8))));
+        assert bram_byte(12) = x"01" report "Test 1 FAIL: byte 12 expected 1  got " &
+                                integer'image(to_integer(unsigned(bram_byte(12))));
+        assert bram_byte(16) = x"01" report "Test 1 FAIL: byte 16  expected 1 got " &
+                                integer'image(to_integer(unsigned(bram_byte(16))));
 
         -----------------------------------------------------------------------
         -- Test 2: trigger DMA readout, verify non-zero words in bitmap
@@ -534,18 +560,24 @@ begin
 
         -- Collect DMA output, check at least one word is non-zero
         non_zero := false;
+        byte_sum  := 0;
         for i in 0 to WORD_COUNT-1 loop
             wait until rising_edge(clock) and axis_tvalid = '1';
+            byte_sum := byte_sum
+                      + to_integer(unsigned(axis_tdata( 7 downto  0)))
+                      + to_integer(unsigned(axis_tdata(15 downto  8)))
+                      + to_integer(unsigned(axis_tdata(23 downto 16)))
+                      + to_integer(unsigned(axis_tdata(31 downto 24)));
             if axis_tdata /= x"00000000" then
                 non_zero := true;
-                report "Non-zero word at index " & integer'image(i)
-                     & " = 0x" & integer'image(to_integer(unsigned(axis_tdata)));
             end if;
             if i = WORD_COUNT-1 then
                 assert axis_tlast = '1' report "tlast not asserted on last word";
             end if;
         end loop;
-        assert non_zero report "All DMA words are zero - bitmap was not written";
+        assert non_zero report "Test 2: all DMA words are zero - bitmap was not written";
+        assert byte_sum = 4
+            report "Test 2: byte sum = " & integer'image(byte_sum) & ", expected 4";
 
         -- Poll until dma_done
         loop
@@ -553,7 +585,6 @@ begin
                           br_axi_rvalid, clock, x"04", status);
             exit when status(1) = '1';  -- dma_done
         end loop;
-        report "DMA complete";
 
         -----------------------------------------------------------------------
         -- Test 3: second DMA readout should show bitmap cleared by first DMA
@@ -573,25 +604,232 @@ begin
         for i in 0 to WORD_COUNT-1 loop
             wait until rising_edge(clock) and axis_tvalid = '1';
             assert axis_tdata = x"00000000"
-                report "Bitmap not cleared at word " & integer'image(i)
+                report "Test 3: bitmap not cleared at word " & integer'image(i)
                      & " got 0x" & integer'image(to_integer(unsigned(axis_tdata)));
         end loop;
-        report "Bitmap correctly cleared by read-back DMA";
 
         -----------------------------------------------------------------------
-        -- Test 4: read edge extractor stats
+        -- Test 4: repeated address ? same address 3 times, expect byte = 3
+        -- Address 0x20 = byte 32, word 8
 
-        axi_lite_read(ee_axi_araddr, ee_axi_arvalid, ee_axi_rdata, ee_axi_arready,
-                      ee_axi_rvalid, clock, x"00", status);
-        report "edges_total = " & integer'image(to_integer(unsigned(status)));
-        assert unsigned(status) = 4 report "Expected 4 edges total";
+        atom_valid0     <= '1';
+        address_reg_0_0 <= x"0000000000000020";
+        atom_elements0  <= (others => '1');
+        atom_nb0        <= "00001";
+        wait until rising_edge(clock);
+        atom_valid0 <= '0';
+
+        atom_valid0     <= '1';
+        address_reg_0_0 <= x"0000000000000020";
+        atom_elements0  <= (others => '1');
+        atom_nb0        <= "00001";
+        wait until rising_edge(clock);
+        atom_valid0 <= '0';
+
+        atom_valid0     <= '1';
+        address_reg_0_0 <= x"0000000000000020";
+        atom_elements0  <= (others => '1');
+        atom_nb0        <= "00001";
+        wait until rising_edge(clock);
+        atom_valid0 <= '0';
+
+        wait until writer_idle = '0';
+        loop
+            wait until rising_edge(clock);
+            exit when writer_idle = '1' and edge_empty = '1';
+        end loop;
+
+        assert bram_byte(32) = x"03" report "Test 4: byte 32 expected 3";
+
+        -----------------------------------------------------------------------
+        -- Test 5: all 4 ports simultaneously, all different addresses
+        -- Addresses 0x40, 0x44, 0x48, 0x4C = bytes 64, 68, 72, 76
+        -- Words 16, 17, 18, 19
+
+        atom_valid0     <= '1';
+        address_reg_0_0 <= x"0000000000000040";
+        atom_elements0  <= (others => '1');
+        atom_nb0        <= "00001";
+
+        atom_valid1     <= '1';
+        address_reg_0_1 <= x"0000000000000044";
+        atom_elements1  <= (others => '1');
+        atom_nb1        <= "00001";
+
+        atom_valid2     <= '1';
+        address_reg_0_2 <= x"0000000000000048";
+        atom_elements2  <= (others => '1');
+        atom_nb2        <= "00001";
+
+        atom_valid3     <= '1';
+        address_reg_0_3 <= x"000000000000004c";
+        atom_elements3  <= (others => '1');
+        atom_nb3        <= "00001";
+        wait until rising_edge(clock);
+        atom_valid0 <= '0';
+        atom_valid1 <= '0';
+        atom_valid2 <= '0';
+        atom_valid3 <= '0';
+
+        wait until writer_idle = '0';
+        loop
+            wait until rising_edge(clock);
+            exit when writer_idle = '1' and edge_empty = '1';
+        end loop;
+
+        assert bram_byte(64) = x"01" report "Test 5: byte 64 expected 1 got "
+                                & integer'image(to_integer(unsigned(bram_byte(64))));
+        assert bram_byte(68) = x"01" report "Test 5: byte 68 expected 1 got "
+                                & integer'image(to_integer(unsigned(bram_byte(68))));
+        assert bram_byte(72) = x"01" report "Test 5: byte 72 expected 1 got "
+                                & integer'image(to_integer(unsigned(bram_byte(72))));
+        assert bram_byte(76) = x"01" report "Test 5: byte 76 expected 1 got "
+                                & integer'image(to_integer(unsigned(bram_byte(66))));
+
+        -----------------------------------------------------------------------
+        -- Test 6: mixed ? 2 ports with same address, 2 ports with different
+        -- Port 0 and 1: address 0x50 = byte 80 (expect 2)
+        -- Port 2: address 0x54 = byte 84 (expect 1)
+        -- Port 3: address 0x58 = byte 88 (expect 1)
+
+        atom_valid0     <= '1';
+        address_reg_0_0 <= x"0000000000000050";
+        atom_elements0  <= (others => '1');
+        atom_nb0        <= "00001";
+
+        atom_valid1     <= '1';
+        address_reg_0_1 <= x"0000000000000050";
+        atom_elements1  <= (others => '1');
+        atom_nb1        <= "00001";
+
+        atom_valid2     <= '1';
+        address_reg_0_2 <= x"0000000000000054";
+        atom_elements2  <= (others => '1');
+        atom_nb2        <= "00001";
+
+        atom_valid3     <= '1';
+        address_reg_0_3 <= x"0000000000000058";
+        atom_elements3  <= (others => '1');
+        atom_nb3        <= "00001";
+        wait until rising_edge(clock);
+        atom_valid0 <= '0';
+        atom_valid1 <= '0';
+        atom_valid2 <= '0';
+        atom_valid3 <= '0';
+
+        wait until writer_idle = '0';
+        loop
+            wait until rising_edge(clock);
+            exit when writer_idle = '1' and edge_empty = '1';
+        end loop;
+
+        assert bram_byte(80) = x"02" report "Test 6: byte 80 expected 2 got "
+                                & integer'image(to_integer(unsigned(bram_byte(80))));
+        assert bram_byte(84) = x"01" report "Test 6: byte 84 expected 1 got "
+                                & integer'image(to_integer(unsigned(bram_byte(84))));
+        assert bram_byte(88) = x"01" report "Test 6: byte 88 expected 1 got "
+                                & integer'image(to_integer(unsigned(bram_byte(88))));
+
+        -----------------------------------------------------------------------
+        -- Test 7: N atoms ? atom_elements has some 0 bits (N atoms)
+        -- Port 0: address 0x60, atom_nb=4, atom_elements=0001 (3 N, 1 E)
+        -- The index is just the raw address (XOR commented out), so byte 96
+        -- Still writes byte 96 = 1 regardless of N count (index = raw addr)
+
+        atom_valid0     <= '1';
+        address_reg_0_0 <= x"0000000000000060";
+        atom_elements0  <= (0 => '1', others => '0'); -- bit 0 = E atom
+        atom_nb0        <= "00100";                   -- 4 atoms total
+        wait until rising_edge(clock);
+        atom_valid0 <= '0';
+
+        wait until writer_idle = '0';
+        loop
+            wait until rising_edge(clock);
+            exit when writer_idle = '1' and edge_empty = '1';
+        end loop;
+
+        assert bram_byte(96) = x"01" report "Test 7 FAIL: byte 96 expected 1 got "
+                                & integer'image(to_integer(unsigned(bram_byte(96))));
+
+
+        -----------------------------------------------------------------------
+        -- Test 8: saturation ? write to same address 255 times, then one more
+        -- Address 0x70 = byte 112, should saturate at 0xFF
+
+        for j in 0 to 255 loop
+            atom_valid0     <= '1';
+            address_reg_0_0 <= x"0000000000000070";
+            atom_elements0  <= (others => '1');
+            atom_nb0        <= "00001";
+            wait until rising_edge(clock);
+            atom_valid0 <= '0';
+            -- Wait for writer to be ready for next entry
+            loop
+                wait until rising_edge(clock);
+                exit when edge_empty = '1' and writer_idle = '1';
+            end loop;
+        end loop;
+
+        assert bram_byte(112) = x"FF" report "Test 8: byte 112 expected 0xFF got "
+                                & integer'image(to_integer(unsigned(bram_byte(112))));
+
+        -----------------------------------------------------------------------
+        -- Test 9: DMA readout of accumulated state (tests 4-8 combined)
+        -- Do a full DMA and verify byte_sum matches expected total
+        -- Test 4: 3 hits at byte 32
+        -- Test 5: 1 each at bytes 64, 68, 72, 76
+        -- Test 6: 2 at byte 80, 1 each at 84, 88
+        -- Test 7: 1 at byte 96
+        -- Test 8: 255 at byte 112 (saturated)
+        -- Total byte sum = 3 + 4 + 4 + 1 + 255 = 267
+
+        loop
+            axi_lite_read(br_axi_araddr, br_axi_arvalid, br_axi_rdata, br_axi_arready,
+                          br_axi_rvalid, clock, x"04", status);
+            exit when status(0) = '1';
+        end loop;
+
+        axi_lite_write(br_axi_awaddr, br_axi_awvalid, br_axi_wdata, br_axi_wvalid,
+                       br_axi_awready, br_axi_wready, br_axi_bvalid, clock,
+                       x"00", x"00000001");
+
+        byte_sum := 0;
+        for i in 0 to WORD_COUNT-1 loop
+            wait until rising_edge(clock) and axis_tvalid = '1';
+            byte_sum := byte_sum
+                      + to_integer(unsigned(axis_tdata( 7 downto  0)))
+                      + to_integer(unsigned(axis_tdata(15 downto  8)))
+                      + to_integer(unsigned(axis_tdata(23 downto 16)))
+                      + to_integer(unsigned(axis_tdata(31 downto 24)));
+        end loop;
+        assert byte_sum = 267
+            report "Test 9: expected 267, got " & integer'image(byte_sum);
+
+        loop
+            axi_lite_read(br_axi_araddr, br_axi_arvalid, br_axi_rdata, br_axi_arready,
+                          br_axi_rvalid, clock, x"04", status);
+            exit when status(1) = '1';
+        end loop;
+
+        -----------------------------------------------------------------------
+        -- Test 10: edge extractor stats check
 
         axi_lite_read(ee_axi_araddr, ee_axi_arvalid, ee_axi_rdata, ee_axi_arready,
                       ee_axi_rvalid, clock, x"04", status);
-        report "fifo_overflow_count = " & integer'image(to_integer(unsigned(status)));
-        assert unsigned(status) = 0 report "Expected no overflows";
+        report "edges_total = " & integer'image(to_integer(unsigned(status)));
+        -- Test 1: 4, Test 4: 3, Test 5: 4, Test 6: 4, Test 7: 1, Test 8: 256
+        assert unsigned(status) = 272
+            report "Test 10: expected edges_total=272, got "
+                 & integer'image(to_integer(unsigned(status)));
 
-        report "Integration test complete";
+        axi_lite_read(ee_axi_araddr, ee_axi_arvalid, ee_axi_rdata, ee_axi_arready,
+                      ee_axi_rvalid, clock, x"08", status);
+
+        assert unsigned(status) = 0 report "Test 10 FAIL: expected no overflows got "
+                                    & integer'image(to_integer(unsigned(status)));
+
+
         wait;
     end process;
 
