@@ -50,6 +50,9 @@ entity etm_decoder is
         i_data : in std_logic_vector(31 downto 0);
         i_valid: in std_logic;
 
+        -- From the bram reader
+        i_freeze_request : in std_logic;
+
         o_atom_valid0      : out std_logic;
         o_exception_valid0 : out std_logic;
         o_ts0              : out std_logic_vector(63 downto 0);
@@ -150,6 +153,7 @@ architecture Behavioral of etm_decoder is
         output_state  : OutputState;
         address_state : AddressState;
         context_state : ContextState;
+        synchronized  : std_logic; -- reset between runs, waits for TraceOn
         -- This denotes whether the tracestate is valid. The trace state is INVALID,
         -- for example, if we are in the process of updating the timestamp.
         -- This takes multiple packets to update.
@@ -1062,6 +1066,8 @@ architecture Behavioral of etm_decoder is
         nop,
         shift_address,
 
+        trace_on,
+
         update_address_7_1_short,
         update_address_8_2_short,
         update_address_15_8_short,
@@ -1448,8 +1454,9 @@ architecture Behavioral of etm_decoder is
                     when AtomF6 =>
                         return scan_6_atom_elements;
 
+                    when TraceOn =>
+                        return trace_on;
                     when TraceEvent => return trace_event;
-                    -- TODO: Add Atom/Exception detection here!
                     when others => return nop;
                 end case;
             when others =>
@@ -1714,91 +1721,109 @@ architecture Behavioral of etm_decoder is
                 out_trace_state.context_state.context_id        := get_update_contextid_31_24(in_trace_state.context_state.context_id, byte);
 
             when scan_1_atom_element =>
-                out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 1 => '0') & byte(0);
-                out_trace_state.output_state.atom_nb       := 1;
-                out_trace_state.output_state.atom_valid    := '1';
-
-            when scan_2_atom_elements =>
-                out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 2 => '0') & byte(1 downto 0);
-                out_trace_state.output_state.atom_nb       := 2;
-                out_trace_state.output_state.atom_valid    := '1';
-
-            when scan_3_atom_elements =>
-                out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 3 => '0') & byte(2 downto 0);
-                out_trace_state.output_state.atom_nb       := 3;
-                out_trace_state.output_state.atom_valid    := '1';
-
-            when scan_4_atom_elements =>
-                case byte(1 downto 0) is
-                    when "00" =>
-                        out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 4 => '0') & "0111";
-                        out_trace_state.output_state.atom_nb       := 4;
-                        out_trace_state.output_state.atom_valid    := '1';
-                    when "01" =>
-                        out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 4 => '0') & "0000";
-                        out_trace_state.output_state.atom_nb       := 4;
-                        out_trace_state.output_state.atom_valid    := '1';
-                    when "10" =>
-                        out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 4 => '0') & "0101";
-                        out_trace_state.output_state.atom_nb       := 4;
-                        out_trace_state.output_state.atom_valid    := '1';
-                    when "11" =>
-                        out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 4 => '0') & "1010";
-                        out_trace_state.output_state.atom_nb       := 4;
-                        out_trace_state.output_state.atom_valid    := '1';
-                    when others =>
-                        -- Invalid
-                        out_trace_state.output_state.atom_elements := (others => '0');
-                        out_trace_state.output_state.atom_nb       := 0;
-                        out_trace_state.output_state.atom_valid    := '0';
-                end case;
-
-            when scan_5_atom_elements =>
-                atom_f5_code := (byte(5) & byte(1) & byte(0));
-                case atom_f5_code is
-                    when "101" =>
-                        out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 5 => '0') & "01111";
-                        out_trace_state.output_state.atom_nb       := 5;
-                        out_trace_state.output_state.atom_valid    := '1';
-                    when "001" =>
-                        out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 5 => '0') & "00000";
-                        out_trace_state.output_state.atom_nb       := 5;
-                        out_trace_state.output_state.atom_valid    := '1';
-                    when "010" =>
-                        out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 5 => '0') & "01010";
-                        out_trace_state.output_state.atom_nb       := 5;
-                        out_trace_state.output_state.atom_valid    := '1';
-                    when "011" =>
-                        out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 5 => '0') & "10101";
-                        out_trace_state.output_state.atom_nb       := 5;
-                        out_trace_state.output_state.atom_valid    := '1';
-                    when others =>
-                        out_trace_state.output_state.atom_elements := (others => '0');
-                        out_trace_state.output_state.atom_nb       := 0;
-                        out_trace_state.output_state.atom_valid    := '0';
-                end case;
-
-            when scan_6_atom_elements =>
-                atom_size := to_integer(unsigned(byte(4 downto 0))) + 3;
-
-                -- Check for max size, 0b10100 or 20 + 3 (1 comes from the A bit)
-                if atom_size > ATOM_ELTS_SIZE - 1 then
-                    atom_size := ATOM_ELTS_SIZE - 1;
+                if in_trace_state.synchronized = '1' then
+                    out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 1 => '0') & byte(0);
+                    out_trace_state.output_state.atom_nb       := 1;
+                    out_trace_state.output_state.atom_valid    := '1';
                 end if;
 
-                out_trace_state.output_state.atom_elements := (others => '0');
+            when scan_2_atom_elements =>
+                if in_trace_state.synchronized = '1' then
+                    out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 2 => '0') & byte(1 downto 0);
+                    out_trace_state.output_state.atom_nb       := 2;
+                    out_trace_state.output_state.atom_valid    := '1';
+                end if;
 
-                -- Count of Es
-                out_trace_state.output_state.atom_elements(atom_size - 1 downto 0) := (others => '1');
-                -- Inverted A bit, 1->N, 0->E
-                out_trace_state.output_state.atom_elements(atom_size - 1) := not byte(5);
+            when scan_3_atom_elements =>
+                if in_trace_state.synchronized = '1' then
+                    out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 3 => '0') & byte(2 downto 0);
+                    out_trace_state.output_state.atom_nb       := 3;
+                    out_trace_state.output_state.atom_valid    := '1';
+                end if;
 
-                out_trace_state.output_state.atom_nb := atom_size;
-                out_trace_state.output_state.atom_valid    := '1';
+            when scan_4_atom_elements =>
+                if in_trace_state.synchronized = '1' then
+                    case byte(1 downto 0) is
+                        when "00" =>
+                            out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 4 => '0') & "0111";
+                            out_trace_state.output_state.atom_nb       := 4;
+                            out_trace_state.output_state.atom_valid    := '1';
+                        when "01" =>
+                            out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 4 => '0') & "0000";
+                            out_trace_state.output_state.atom_nb       := 4;
+                            out_trace_state.output_state.atom_valid    := '1';
+                        when "10" =>
+                            out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 4 => '0') & "0101";
+                            out_trace_state.output_state.atom_nb       := 4;
+                            out_trace_state.output_state.atom_valid    := '1';
+                        when "11" =>
+                            out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 4 => '0') & "1010";
+                            out_trace_state.output_state.atom_nb       := 4;
+                            out_trace_state.output_state.atom_valid    := '1';
+                        when others =>
+                            -- Invalid
+                            out_trace_state.output_state.atom_elements := (others => '0');
+                            out_trace_state.output_state.atom_nb       := 0;
+                            out_trace_state.output_state.atom_valid    := '0';
+                    end case;
+                end if;
+
+            when scan_5_atom_elements =>
+                if in_trace_state.synchronized = '1' then
+                    atom_f5_code := (byte(5) & byte(1) & byte(0));
+                    case atom_f5_code is
+                        when "101" =>
+                            out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 5 => '0') & "01111";
+                            out_trace_state.output_state.atom_nb       := 5;
+                            out_trace_state.output_state.atom_valid    := '1';
+                        when "001" =>
+                            out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 5 => '0') & "00000";
+                            out_trace_state.output_state.atom_nb       := 5;
+                            out_trace_state.output_state.atom_valid    := '1';
+                        when "010" =>
+                            out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 5 => '0') & "01010";
+                            out_trace_state.output_state.atom_nb       := 5;
+                            out_trace_state.output_state.atom_valid    := '1';
+                        when "011" =>
+                            out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 5 => '0') & "10101";
+                            out_trace_state.output_state.atom_nb       := 5;
+                            out_trace_state.output_state.atom_valid    := '1';
+                        when others =>
+                            out_trace_state.output_state.atom_elements := (others => '0');
+                            out_trace_state.output_state.atom_nb       := 0;
+                            out_trace_state.output_state.atom_valid    := '0';
+                    end case;
+                end if;
+
+            when scan_6_atom_elements =>
+                if in_trace_state.synchronized = '1' then
+                    atom_size := to_integer(unsigned(byte(4 downto 0))) + 3;
+
+                    -- Check for max size, 0b10100 or 20 + 3 (1 comes from the A bit)
+                    if atom_size > ATOM_ELTS_SIZE - 1 then
+                        atom_size := ATOM_ELTS_SIZE - 1;
+                    end if;
+
+                    out_trace_state.output_state.atom_elements := (others => '0');
+
+                    -- Count of Es
+                    out_trace_state.output_state.atom_elements(atom_size - 1 downto 0) := (others => '1');
+                    -- Inverted A bit, 1->N, 0->E
+                    out_trace_state.output_state.atom_elements(atom_size - 1) := not byte(5);
+
+                    out_trace_state.output_state.atom_nb := atom_size;
+                    out_trace_state.output_state.atom_valid    := '1';
+                end if;
 
             when update_exception_type_4_0 =>
                 out_trace_state.output_state.exception_type  := byte(5 downto 1);
                 out_trace_state.output_state.exception_valid := '1';
+
+            when trace_on =>
+                out_trace_state.synchronized       := '1';
+                out_trace_state.address_state.reg0 := (others => '0');
+                out_trace_state.address_state.reg1 := (others => '0');
+                out_trace_state.address_state.reg2 := (others => '0');
 
             when nop =>
                 -- do nothing
@@ -1852,6 +1877,8 @@ architecture Behavioral of etm_decoder is
     signal action2 : TraceStateAction;
     signal action3 : TraceStateAction;
 
+    -- Latching freeze to clear synchronization on falling edge
+    signal latched_freeze_req : std_logic := '0';
 begin
 
 -- ==========================
@@ -1960,10 +1987,21 @@ begin
         if aresetn = '0' then
             -- TODO: Deassert in reset?
             data_valid_output_stage <= '0';
+            trace_state3.synchronized <= '0';
         else
             -- TODO: Deassert by default?
             data_valid_output_stage <= '0';
-            if data_valid_action_stage = '1' then
+
+            -- Latch freeze request
+            latched_freeze_req <= i_freeze_request;
+
+            -- Rising edge of freeze = end of iteration
+            if latched_freeze_req = '0' and i_freeze_request = '1' then
+                trace_state3.synchronized          <= '0';
+                trace_state3.address_state.reg0    <= (others => '0');
+                trace_state3.address_state.reg1    <= (others => '0');
+                trace_state3.address_state.reg2    <= (others => '0');
+            elsif data_valid_action_stage = '1' then
                 trace_state0 <= handleActionPlan(trace_state3, action0, data_action_stage(7 downto 0));
 
                 trace_state1 <= handleActionPlan(

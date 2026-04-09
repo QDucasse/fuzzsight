@@ -241,6 +241,8 @@ proc create_hier_cell_decoder { parentCell nameHier } {
   current_bd_instance $hier_obj
 
   # Create interface pins
+  create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:aximm_rtl:1.0 s_axi
+
 
   # Create pins
   create_bd_pin -dir I -type rst aresetn
@@ -262,6 +264,7 @@ proc create_hier_cell_decoder { parentCell nameHier } {
   create_bd_pin -dir O -from 63 -to 0 o_address_reg_0_3
   create_bd_pin -dir O -from 23 -to 0 o_atom_elements3
   create_bd_pin -dir O -from 4 -to 0 o_atom_nb3
+  create_bd_pin -dir I i_freeze_request
 
   # Create instance: etm_decoder_0, and set properties
   set block_name etm_decoder
@@ -340,23 +343,26 @@ proc create_hier_cell_decoder { parentCell nameHier } {
      return 1
    }
   
+  # Create interface connections
+  connect_bd_intf_net -intf_net Conn1 [get_bd_intf_pins frame_generator_0/s_axi] [get_bd_intf_pins s_axi]
+
   # Create port connections
   connect_bd_net -net aclk_1  [get_bd_pins aclk] \
-  [get_bd_pins frame_generator_0/aclk] \
   [get_bd_pins frame_deformatter_0/aclk] \
   [get_bd_pins byte_stream_demux_0/aclk] \
   [get_bd_pins byte_stream_compactor_0/aclk] \
   [get_bd_pins byte_stream_compactor_1/aclk] \
   [get_bd_pins stm_decoder_0/aclk] \
-  [get_bd_pins etm_decoder_0/aclk]
+  [get_bd_pins etm_decoder_0/aclk] \
+  [get_bd_pins frame_generator_0/aclk]
   connect_bd_net -net aresetn_1  [get_bd_pins aresetn] \
-  [get_bd_pins frame_generator_0/aresetn] \
   [get_bd_pins frame_deformatter_0/aresetn] \
   [get_bd_pins byte_stream_demux_0/aresetn] \
   [get_bd_pins byte_stream_compactor_0/aresetn] \
   [get_bd_pins byte_stream_compactor_1/aresetn] \
   [get_bd_pins stm_decoder_0/aresetn] \
-  [get_bd_pins etm_decoder_0/aresetn]
+  [get_bd_pins etm_decoder_0/aresetn] \
+  [get_bd_pins frame_generator_0/aresetn]
   connect_bd_net -net byte_stream_compactor_0_o_data  [get_bd_pins byte_stream_compactor_0/o_data] \
   [get_bd_pins etm_decoder_0/i_data]
   connect_bd_net -net byte_stream_compactor_0_o_valid  [get_bd_pins byte_stream_compactor_0/o_valid] \
@@ -418,6 +424,9 @@ proc create_hier_cell_decoder { parentCell nameHier } {
   [get_bd_pins frame_deformatter_0/i_valid_frame]
   connect_bd_net -net i_data_1  [get_bd_pins i_data] \
   [get_bd_pins frame_generator_0/i_data]
+  connect_bd_net -net i_freeze_request_1  [get_bd_pins i_freeze_request] \
+  [get_bd_pins etm_decoder_0/i_freeze_request] \
+  [get_bd_pins frame_generator_0/i_freeze_request]
 
   # Restore current instance
   current_bd_instance $oldCurInst
@@ -1605,7 +1614,7 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
   set axi_smc [ create_bd_cell -type ip -vlnv xilinx.com:ip:smartconnect:1.0 axi_smc ]
   set_property -dict [list \
     CONFIG.NUM_CLKS {2} \
-    CONFIG.NUM_MI {4} \
+    CONFIG.NUM_MI {5} \
     CONFIG.NUM_SI {1} \
   ] $axi_smc
 
@@ -1668,6 +1677,7 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
   connect_bd_intf_net -intf_net axi_smc_M01_AXI [get_bd_intf_pins axi_smc/M01_AXI] [get_bd_intf_pins bitmap_reader_bram/s_axi]
   connect_bd_intf_net -intf_net axi_smc_M02_AXI [get_bd_intf_pins axi_smc/M02_AXI] [get_bd_intf_pins decoder_stats_lut/s_axi]
   connect_bd_intf_net -intf_net axi_smc_M03_AXI [get_bd_intf_pins axi_smc/M03_AXI] [get_bd_intf_pins edge_extractor/s_axi]
+  connect_bd_intf_net -intf_net axi_smc_M04_AXI [get_bd_intf_pins axi_smc/M04_AXI] [get_bd_intf_pins decoder/s_axi]
   connect_bd_intf_net -intf_net bitmap_reader_bram_0_m_axis [get_bd_intf_pins bitmap_reader_bram/m_axis] [get_bd_intf_pins axi_dma/S_AXIS_S2MM]
   connect_bd_intf_net -intf_net zynq_ultra_ps_pl_M_AXI_HPM0_LPD [get_bd_intf_pins zynq_ultra_ps_pl/M_AXI_HPM0_LPD] [get_bd_intf_pins axi_smc/S00_AXI]
 
@@ -1684,7 +1694,8 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
   [get_bd_pins bram/web]
   connect_bd_net -net bitmap_reader_bram_0_o_fifo_freeze_req  [get_bd_pins bitmap_reader_bram/o_fifo_freeze_req] \
   [get_bd_pins edge_extractor/i_freeze_request] \
-  [get_bd_pins bitmap_writer_bram/i_freeze_request]
+  [get_bd_pins bitmap_writer_bram/i_freeze_request] \
+  [get_bd_pins decoder/i_freeze_request]
   connect_bd_net -net bitmap_writer_bram_0_bram_addr  [get_bd_pins bitmap_writer_bram/bram_addr] \
   [get_bd_pins bram/addra]
   connect_bd_net -net bitmap_writer_bram_0_bram_din  [get_bd_pins bitmap_writer_bram/bram_din] \
@@ -1797,6 +1808,7 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
   assign_bd_address -offset 0x80010000 -range 0x00010000 -with_name SEG_bitmap_reader_bram_0_reg0 -target_address_space [get_bd_addr_spaces zynq_ultra_ps_pl/Data] [get_bd_addr_segs bitmap_reader_bram/s_axi/reg0] -force
   assign_bd_address -offset 0x80020000 -range 0x00001000 -with_name SEG_decoder_stats_lut_0_reg0 -target_address_space [get_bd_addr_spaces zynq_ultra_ps_pl/Data] [get_bd_addr_segs decoder_stats_lut/s_axi/reg0] -force
   assign_bd_address -offset 0x80021000 -range 0x00001000 -with_name SEG_edge_extractor_0_reg0 -target_address_space [get_bd_addr_spaces zynq_ultra_ps_pl/Data] [get_bd_addr_segs edge_extractor/s_axi/reg0] -force
+  assign_bd_address -offset 0x80022000 -range 0x00001000 -target_address_space [get_bd_addr_spaces zynq_ultra_ps_pl/Data] [get_bd_addr_segs decoder/frame_generator_0/s_axi/reg0] -force
   assign_bd_address -offset 0x00000000 -range 0x80000000 -target_address_space [get_bd_addr_spaces axi_dma/Data_S2MM] [get_bd_addr_segs zynq_ultra_ps_pl/SAXIGP2/HP0_DDR_LOW] -force
   assign_bd_address -offset 0xC0000000 -range 0x20000000 -target_address_space [get_bd_addr_spaces axi_dma/Data_S2MM] [get_bd_addr_segs zynq_ultra_ps_pl/SAXIGP2/HP0_QSPI] -force
 
