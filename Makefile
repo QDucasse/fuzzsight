@@ -34,7 +34,7 @@ RUN_VIVADO := $(SCRIPTS_DIR)/env/run_vivado.sh
 RUN_XSCT   := $(SCRIPTS_DIR)/env/run_xsct.sh
 
 
-.PHONY: new project synth impl bit xsa overlay
+.PHONY: new project synth impl bit xsa overlay sim
 
 default: help
 
@@ -58,6 +58,10 @@ synth: project
 update:
 	PROJECT=$(PROJECT) PROJECT_ROOT=$(PROJECT_ROOT) \
 	$(RUN_VIVADO) $(SCRIPTS_DIR)/vivado/update_bd.tcl
+
+sim:
+	PROJECT=$(PROJECT) PROJECT_ROOT=$(PROJECT_ROOT) TB=$(TB) \
+	$(RUN_VIVADO) $(SCRIPTS_DIR)/vivado/run_sim.tcl
 
 # -- xsct
 sdt:
