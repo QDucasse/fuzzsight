@@ -315,18 +315,13 @@ begin
 
                     case araddr_reg is
                         -- 0x04: Status register
-                        --   bit 0 = i_fifo_empty:  FIFO drained, safe to DMA
-                        --   bit 1 = dma_done:      DMA readout complete
+                        --   bit 0 = dma_done:      DMA readout complete
                         --                          (sticky, cleared on read)
-                        --   bit 2 = dma_busy:      DMA in progress
-                        --   bit 3 = clear_done:    bitmap clear complete
-                        --                          (sticky, cleared on read)
-                        --   bit 4 = clear_busy:    clear in progress
+                        --   bit 1 = dma_busy:      DMA in progress
                         when x"04" =>
-                            s_axi_rdata <= (31 downto 3 => '0')
+                            s_axi_rdata <= (31 downto 4 => '0')
                                          & dma_busy
-                                         & dma_done
-                                         & i_fifo_empty;
+                                         & dma_done;
 
                             -- Clear out the values when read
                             dma_done   <= '0';

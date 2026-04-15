@@ -24,7 +24,7 @@ int bitmap_dma_open(bitmap_dma_t *h, size_t bitmap_size)
     }
 
     // Map udmabuf as destination
-    h->udmabuf_fd = open(UDMABUF_DEV, O_RDWR);
+    h->udmabuf_fd = open(UDMABUF_DEV, O_RDWR, O_SYNC);
     if (h->udmabuf_fd < 0) {
         perror("open udmabuf");
         axi_regs_close(&h->dma);
@@ -62,10 +62,6 @@ void bitmap_dma_close(bitmap_dma_t *h)
 
 int bitmap_dma_transfer(bitmap_dma_t *h)
 {
-    // Wait for edge extractor FIFO to drain
-    while (!(axi_regs_read(&h->reader, BITMAP_READER_STATUS) & STATUS_FIFO_EMPTY))
-        ;
-
     // Trigger bitmap reader DMA
     axi_regs_write(&h->reader, BITMAP_READER_CTRL, 1);
 
