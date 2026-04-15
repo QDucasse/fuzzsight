@@ -15,6 +15,9 @@ entity byte_stream_demux is
     port (
         aclk : in std_logic;
         aresetn : in std_logic;
+
+        i_soft_reset : in std_logic;
+
         i_data : in std_logic_vector(31 downto 0);
         i_ids  : in std_logic_vector(27 downto 0);
         i_keep: in std_logic_vector(3 downto 0);
@@ -81,7 +84,7 @@ end;
 begin
 demux : process(aclk) begin
     if rising_edge(aclk) then
-        if aresetn = '0' then
+        if aresetn = '0' or i_soft_reset = '1' then
             o_keep0 <= EMPTY_KEEP;
             o_keep1 <= EMPTY_KEEP;
             o_keep2 <= EMPTY_KEEP;
@@ -96,12 +99,13 @@ demux : process(aclk) begin
                 o_keep3 <= createIdMask(ETM3_ID,i_ids,i_keep);
                 o_keeps <= createIdMask(STM_ID,i_ids,i_keep);
                 -- Check if no mask matches it, raising an error
-                if createIdMask(ETM0_ID,i_ids,i_keep) = EMPTY_KEEP and
-                createIdMask(ETM1_ID,i_ids,i_keep) = EMPTY_KEEP and
-                createIdMask(ETM2_ID,i_ids,i_keep) = EMPTY_KEEP and
-                createIdMask(ETM3_ID,i_ids,i_keep) = EMPTY_KEEP and
-                createIdMask(STM_ID,i_ids,i_keep) = EMPTY_KEEP then
-                    o_bytestream_demux_id_error <= '1';
+                if i_keep /= "0000" and
+                    createIdMask(ETM0_ID,i_ids,i_keep) = EMPTY_KEEP and
+                    createIdMask(ETM1_ID,i_ids,i_keep) = EMPTY_KEEP and
+                    createIdMask(ETM2_ID,i_ids,i_keep) = EMPTY_KEEP and
+                    createIdMask(ETM3_ID,i_ids,i_keep) = EMPTY_KEEP and
+                    createIdMask(STM_ID,i_ids,i_keep) = EMPTY_KEEP then
+                        o_bytestream_demux_id_error <= '1';
                 else
                     o_bytestream_demux_id_error <= '0';
                 end if;

@@ -15,6 +15,9 @@ entity frame_generator is
     port (
         aclk    : in std_logic;
         aresetn : in std_logic;
+
+        i_soft_reset : in std_logic;
+
         i_data  : in std_logic_vector (31 downto 0);
 
         o_frame       : out std_logic_vector(127 downto 0);
@@ -37,7 +40,7 @@ architecture Behavioral of frame_generator is
     generator : process (ACLK) begin
     if rising_edge(ACLK) then
         -- Active low
-        if aresetn = '0' then
+        if aresetn = '0' or i_soft_reset = '1' then
             tpiu_packets_handled <= 0;
 
             o_frame       <= EMPTY_FRAME;

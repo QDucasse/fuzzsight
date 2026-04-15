@@ -60,6 +60,9 @@ entity frame_deformatter is
   port (
     aclk : in std_logic;
     aresetn : in std_logic;
+
+    i_soft_reset : in std_logic;
+
     i_frame: in std_logic_vector(127 downto 0);
     i_valid_frame : in std_logic;
 
@@ -171,9 +174,9 @@ begin
      end case;
 end;
 
-pure function isNewID(idorData : IdOrData) return boolean is
+pure function isNewID(id_data : IdOrData) return boolean is
 begin
-    return IdOrData.f = '1';
+    return id_data.f = '1';
 end;
 
 pure function extractDataFromIdOrData(idOrData : IdOrData; aux : Auxiliary; index : integer) return std_logic_vector is
@@ -212,7 +215,14 @@ end;
 
 -- From the two ID/Data bytes of a given word, extract them if needed (otherwise last id)
 -- Constructs the combination of the four IDs in the output IDs
-pure function extractOutIds(aux : Auxiliary; first_id_or_data : IdOrData; second_id_or_data : IdOrData; last_id : std_logic_vector(6 downto 0)) return std_logic_vector is
+pure function extractOutIds(
+    aux : Auxiliary;
+    first_id_or_data : IdOrData;
+    second_id_or_data : IdOrData;
+    last_id : std_logic_vector(6 downto 0);
+    first_idx : integer range 0 to 6
+)
+    return std_logic_vector is
     variable out_ids_res : std_logic_vector(27 downto 0);
 begin
     out_ids_res := X"0000000";
@@ -226,17 +236,19 @@ begin
             out_ids_res(20 downto 14) :=  last_id;
             out_ids_res(27 downto 21) :=  last_id;
         else
+            out_ids_res(20 downto 14) := last_id;
             -- second id or data contains a newId
             -- Auxiliary bit high means new id takes effect AFTER byte 1
-            if(aux.b = '1') then
+            if getAuxBit(aux, first_idx + 1) = '1' then
                 out_ids_res(27 downto 21) :=  last_id;
             else
                 out_ids_res(27 downto 21) :=  second_id_or_data.value;
             end if;
         end if;
     else
+        out_ids_res(6 downto 0) := last_id;
         -- first id or data contains newId
-        if(aux.a = '1') then
+        if getAuxBit(aux, first_idx) = '1' then
             out_ids_res(13 downto 7) := last_id;
         else
             out_ids_res(13 downto 7) := first_id_or_data.value;
@@ -246,9 +258,10 @@ begin
             out_ids_res(20 downto 14) := first_id_or_data.value;
             out_ids_res(27 downto 21) := first_id_or_data.value;
         else
+            out_ids_res(20 downto 14) := first_id_or_data.value;
             -- second id or data contains a newId
             -- Auxiliary bit high means new id takes effect AFTER byte 3
-            if(aux.b = '1') then
+            if getAuxBit(aux, first_idx + 1) = '1' then
                 out_ids_res(27 downto 21) := first_id_or_data.value;
             else
                 out_ids_res(27 downto 21) := second_id_or_data.value;
@@ -280,7 +293,7 @@ signal last_id : std_logic_vector(6 downto 0);
 begin
 meta : process(aclk) begin
 if rising_edge(aclk) then
-    if aresetn = '0' then
+    if aresetn = '0' or i_soft_reset = '1' then
         processing_stage <= 0;
         o_valid <= '0';
         o_bytestream_gen_error <= '0';
@@ -313,119 +326,123 @@ end process;
 -- Extract data from the bytes, one word at a time.
 -- Checks for the F bit on mixed bytes and extracts data if needed.
 data_process : process(aclk) begin
-    if aresetn = '0' then
-        o_keep <= "0000";
-        o_data <= X"00000000";
-    end if;
     if rising_edge(aclk) then
-        case processing_stage is
-            -- Process byte 0 to 3
-            when 4 =>
-                if isNewID(frame.id_data0) then
-                    o_keep(0) <= '0';
-                else
-                    o_data(7 downto 0) <= extractDataFromIdOrData(frame.id_data0, frame.aux, 0);
-                    o_keep(0) <= '1';
-                end if;
-                if isNewID(frame.id_data1) then
-                    o_keep(2) <= '0';
-                else
-                    o_data(23 downto 16) <= extractDataFromIdOrData(frame.id_data1, frame.aux, 1);
-                    o_keep(2) <= '1';
-                end if;
-                -- these bytes always contain Data
-                o_keep(1) <= '1';
-                o_data(15 downto 8) <= frame.data0.value;
-                o_keep(3) <= '1';
-                o_data(31 downto 24) <= frame.data1.value;
-            -- Process byte 4 to 7
-            when 3 =>
-                if isNewID(frame.id_data2) then
-                    o_keep(0) <= '0';
-                else
-                    o_data(7 downto 0) <= extractDataFromIdOrData(frame.id_data2, frame.aux, 2);
-                    o_keep(0) <= '1';
-                end if;
-                if isNewID(frame.id_data3) then
-                    o_keep(2) <= '0';
-                else
-                    o_data(23 downto 16) <= extractDataFromIdOrData(frame.id_data3, frame.aux, 3);
-                    o_keep(2) <= '1';
-                end if;
-                -- these bytes always contain Data
-                o_keep(1) <= '1';
-                o_data(15 downto 8) <= frame.data2.value;
-                o_keep(3) <= '1';
-                o_data(31 downto 24) <= frame.data3.value;
-            -- Process byte 8 to 11
-            when 2 =>
-                if isNewID(frame.id_data4) then
-                    o_keep(0) <= '0';
-                else
-                    o_data(7 downto 0) <= extractDataFromIdOrData(frame.id_data4, frame.aux, 4);
-                    o_keep(0) <= '1';
-                end if;
-                if isNewID(frame.id_data5) then
-                    o_keep(2) <= '0';
-                else
-                    o_data(23 downto 16) <= extractDataFromIdOrData(frame.id_data5, frame.aux, 5);
-                    o_keep(2) <= '1';
-                end if;
-                -- these bytes always contain Data
-                o_keep(1) <= '1';
-                o_data(15 downto 8) <= frame.data4.value;
-                o_keep(3) <= '1';
-                o_data(31 downto 24) <= frame.data5.value;
-            -- Process byte 12-15
-            when 1 =>
-                if isNewID(frame.id_data6) then
-                    o_keep(0) <= '0';
-                else
-                    o_data(7 downto 0) <= extractDataFromIdOrData(frame.id_data6, frame.aux, 6);
-                    o_keep(0) <= '1';
-                end if;
-                if isNewID(frame.id_data7) then
-                    o_keep(2) <= '0';
-                else
-                    o_data(23 downto 16) <= extractDataFromIdOrData(frame.id_data7, frame.aux, 7);
-                    o_keep(2) <= '1';
-                end if;
-                -- these bytes always contain Data
-                o_keep(1) <= '1';
-                o_data(15 downto 8) <= frame.data6.value;
-                -- last byte is auxiliary byte, we ignore this here.
-                o_keep(3) <= '0';
-             when others =>
-                -- do nothing
-        end case;
+        if aresetn = '0' or i_soft_reset = '1' then
+            o_keep <= "0000";
+            o_data <= X"00000000";
+        else
+            case processing_stage is
+                -- Process byte 0 to 3
+                when 4 =>
+                    if isNewID(frame.id_data0) then
+                        o_keep(0) <= '0';
+                    else
+                        o_data(7 downto 0) <= extractDataFromIdOrData(frame.id_data0, frame.aux, 0);
+                        o_keep(0) <= '1';
+                    end if;
+                    if isNewID(frame.id_data1) then
+                        o_keep(2) <= '0';
+                    else
+                        o_data(23 downto 16) <= extractDataFromIdOrData(frame.id_data1, frame.aux, 1);
+                        o_keep(2) <= '1';
+                    end if;
+                    -- these bytes always contain Data
+                    o_keep(1) <= '1';
+                    o_data(15 downto 8) <= frame.data0.value;
+                    o_keep(3) <= '1';
+                    o_data(31 downto 24) <= frame.data1.value;
+                -- Process byte 4 to 7
+                when 3 =>
+                    if isNewID(frame.id_data2) then
+                        o_keep(0) <= '0';
+                    else
+                        o_data(7 downto 0) <= extractDataFromIdOrData(frame.id_data2, frame.aux, 2);
+                        o_keep(0) <= '1';
+                    end if;
+                    if isNewID(frame.id_data3) then
+                        o_keep(2) <= '0';
+                    else
+                        o_data(23 downto 16) <= extractDataFromIdOrData(frame.id_data3, frame.aux, 3);
+                        o_keep(2) <= '1';
+                    end if;
+                    -- these bytes always contain Data
+                    o_keep(1) <= '1';
+                    o_data(15 downto 8) <= frame.data2.value;
+                    o_keep(3) <= '1';
+                    o_data(31 downto 24) <= frame.data3.value;
+                -- Process byte 8 to 11
+                when 2 =>
+                    if isNewID(frame.id_data4) then
+                        o_keep(0) <= '0';
+                    else
+                        o_data(7 downto 0) <= extractDataFromIdOrData(frame.id_data4, frame.aux, 4);
+                        o_keep(0) <= '1';
+                    end if;
+                    if isNewID(frame.id_data5) then
+                        o_keep(2) <= '0';
+                    else
+                        o_data(23 downto 16) <= extractDataFromIdOrData(frame.id_data5, frame.aux, 5);
+                        o_keep(2) <= '1';
+                    end if;
+                    -- these bytes always contain Data
+                    o_keep(1) <= '1';
+                    o_data(15 downto 8) <= frame.data4.value;
+                    o_keep(3) <= '1';
+                    o_data(31 downto 24) <= frame.data5.value;
+                -- Process byte 12-15
+                when 1 =>
+                    if isNewID(frame.id_data6) then
+                        o_keep(0) <= '0';
+                    else
+                        o_data(7 downto 0) <= extractDataFromIdOrData(frame.id_data6, frame.aux, 6);
+                        o_keep(0) <= '1';
+                    end if;
+                    if isNewID(frame.id_data7) then
+                        o_keep(2) <= '0';
+                    else
+                        o_data(23 downto 16) <= extractDataFromIdOrData(frame.id_data7, frame.aux, 7);
+                        o_keep(2) <= '1';
+                    end if;
+                    -- these bytes always contain Data
+                    o_keep(1) <= '1';
+                    o_data(15 downto 8) <= frame.data6.value;
+                    -- last byte is auxiliary byte, we ignore this here.
+                    o_keep(3) <= '0';
+                when others =>
+                    -- do nothing
+            end case;
+        end if;
     end if;
 end process;
 
 
 -- Process the frame word by word based on the current processing stage
-id_process : process(aclk) begin
-    if aresetn = '0' then
-        last_id <= "0000000";
-        o_ids <= X"0000000";
-    end if;
+id_process : process(aclk)
+    variable v_last_id : std_logic_vector(6 downto 0) := "0000000";
+begin
     if rising_edge(aclk) then
-        case processing_stage is
-            when 4 =>
-                o_ids <= extractOutIds(frame.aux, frame.id_data0, frame.id_data1, last_id);
-                last_id <= updateLastId(frame.id_data0, frame.id_data1, last_id);
-             when 3 =>
-                o_ids <= extractOutIds(frame.aux, frame.id_data2, frame.id_data3, last_id);
-                last_id <= updateLastId(frame.id_data2, frame.id_data3, last_id);
-             when 2 =>
-                o_ids <= extractOutIds(frame.aux, frame.id_data4, frame.id_data5, last_id);
-                last_id <= updateLastId(frame.id_data4, frame.id_data5, last_id);
-             when 1 =>
-                o_ids <= extractOutIds(frame.aux, frame.id_data6, frame.id_data7, last_id);
-                last_id <= updateLastId(frame.id_data6, frame.id_data7, last_id);
-             when others =>
-                -- do nothing
-       end case;
-   end if;
+        if aresetn = '0' or i_soft_reset = '1' then
+            v_last_id := "0000000";
+            o_ids <= X"0000000";
+        else
+            case processing_stage is
+                when 4 =>
+                    o_ids <= extractOutIds(frame.aux, frame.id_data0, frame.id_data1, v_last_id, 0);
+                    v_last_id := updateLastId(frame.id_data0, frame.id_data1, v_last_id);
+                when 3 =>
+                    o_ids <= extractOutIds(frame.aux, frame.id_data2, frame.id_data3, v_last_id, 2);
+                    v_last_id := updateLastId(frame.id_data2, frame.id_data3, v_last_id);
+                when 2 =>
+                    o_ids <= extractOutIds(frame.aux, frame.id_data4, frame.id_data5, v_last_id, 4);
+                    v_last_id := updateLastId(frame.id_data4, frame.id_data5, v_last_id);
+                when 1 =>
+                    o_ids <= extractOutIds(frame.aux, frame.id_data6, frame.id_data7, v_last_id, 6);
+                    v_last_id := updateLastId(frame.id_data6, frame.id_data7, v_last_id);
+                when others =>
+                    null;
+            end case;
+        end if;
+    end if;
 end process;
 
 end Behavioral;

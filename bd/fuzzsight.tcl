@@ -46,7 +46,7 @@ if { [string first $scripts_vivado_version $current_vivado_version] == -1 } {
 
 # The design that will be created by this Tcl script contains the following 
 # module references:
-# decoder_stats_lut, edge_extractor, bitmap_writer_bram, bitmap_reader_bram, etm_decoder, byte_stream_compactor, byte_stream_demux, byte_stream_compactor, stm_decoder, frame_deformatter, frame_generator
+# decoder_stats_lut, edge_extractor, bitmap_writer_bram, bitmap_reader_bram, axi_errors, etm_decoder, byte_stream_compactor, byte_stream_demux, byte_stream_compactor, stm_decoder, frame_deformatter, frame_generator
 
 # Please add the sources of those modules before sourcing this Tcl script.
 
@@ -171,6 +171,7 @@ decoder_stats_lut\
 edge_extractor\
 bitmap_writer_bram\
 bitmap_reader_bram\
+axi_errors\
 etm_decoder\
 byte_stream_compactor\
 byte_stream_demux\
@@ -243,25 +244,45 @@ proc create_hier_cell_decoder { parentCell nameHier } {
   # Create interface pins
 
   # Create pins
-  create_bd_pin -dir I -type rst aresetn
-  create_bd_pin -dir I -from 31 -to 0 i_data
   create_bd_pin -dir I -type clk aclk
+  create_bd_pin -dir I -type rst aresetn
+  create_bd_pin -dir I -type rst i_soft_reset
+  create_bd_pin -dir I -from 31 -to 0 i_data
   create_bd_pin -dir O o_atom_valid0
   create_bd_pin -dir O -from 63 -to 0 o_address_reg_0_0
   create_bd_pin -dir O -from 23 -to 0 o_atom_elements0
   create_bd_pin -dir O -from 4 -to 0 o_atom_nb0
+  create_bd_pin -dir O o_exception_valid0
+  create_bd_pin -dir O o_exception_pending0
+  create_bd_pin -dir O -from 4 -to 0 o_exception_type0
+  create_bd_pin -dir O -from 63 -to 0 o_pre_exception_addr0
   create_bd_pin -dir O o_atom_valid1
   create_bd_pin -dir O -from 63 -to 0 o_address_reg_0_1
   create_bd_pin -dir O -from 23 -to 0 o_atom_elements1
   create_bd_pin -dir O -from 4 -to 0 o_atom_nb1
+  create_bd_pin -dir O o_exception_valid1
+  create_bd_pin -dir O o_exception_pending1
+  create_bd_pin -dir O -from 4 -to 0 o_exception_type1
+  create_bd_pin -dir O -from 63 -to 0 o_pre_exception_addr1
   create_bd_pin -dir O o_atom_valid2
   create_bd_pin -dir O -from 63 -to 0 o_address_reg_0_2
   create_bd_pin -dir O -from 23 -to 0 o_atom_elements2
   create_bd_pin -dir O -from 4 -to 0 o_atom_nb2
+  create_bd_pin -dir O o_exception_valid2
+  create_bd_pin -dir O o_exception_pending2
+  create_bd_pin -dir O -from 4 -to 0 o_exception_type2
+  create_bd_pin -dir O -from 63 -to 0 o_pre_exception_addr2
   create_bd_pin -dir O o_atom_valid3
   create_bd_pin -dir O -from 63 -to 0 o_address_reg_0_3
   create_bd_pin -dir O -from 23 -to 0 o_atom_elements3
   create_bd_pin -dir O -from 4 -to 0 o_atom_nb3
+  create_bd_pin -dir O o_exception_valid3
+  create_bd_pin -dir O o_exception_pending3
+  create_bd_pin -dir O -from 4 -to 0 o_exception_type3
+  create_bd_pin -dir O -from 63 -to 0 o_pre_exception_addr3
+  create_bd_pin -dir O o_frame_error
+  create_bd_pin -dir O o_bytestream_gen_error
+  create_bd_pin -dir O o_bytestream_demux_id_error
 
   # Create instance: etm_decoder_0, and set properties
   set block_name etm_decoder
@@ -342,20 +363,20 @@ proc create_hier_cell_decoder { parentCell nameHier } {
   
   # Create port connections
   connect_bd_net -net aclk_1  [get_bd_pins aclk] \
-  [get_bd_pins frame_generator_0/aclk] \
-  [get_bd_pins frame_deformatter_0/aclk] \
-  [get_bd_pins byte_stream_demux_0/aclk] \
+  [get_bd_pins stm_decoder_0/aclk] \
   [get_bd_pins byte_stream_compactor_0/aclk] \
   [get_bd_pins byte_stream_compactor_1/aclk] \
-  [get_bd_pins stm_decoder_0/aclk] \
+  [get_bd_pins byte_stream_demux_0/aclk] \
+  [get_bd_pins frame_deformatter_0/aclk] \
+  [get_bd_pins frame_generator_0/aclk] \
   [get_bd_pins etm_decoder_0/aclk]
   connect_bd_net -net aresetn_1  [get_bd_pins aresetn] \
-  [get_bd_pins frame_generator_0/aresetn] \
-  [get_bd_pins frame_deformatter_0/aresetn] \
-  [get_bd_pins byte_stream_demux_0/aresetn] \
+  [get_bd_pins stm_decoder_0/aresetn] \
   [get_bd_pins byte_stream_compactor_0/aresetn] \
   [get_bd_pins byte_stream_compactor_1/aresetn] \
-  [get_bd_pins stm_decoder_0/aresetn] \
+  [get_bd_pins byte_stream_demux_0/aresetn] \
+  [get_bd_pins frame_deformatter_0/aresetn] \
+  [get_bd_pins frame_generator_0/aresetn] \
   [get_bd_pins etm_decoder_0/aresetn]
   connect_bd_net -net byte_stream_compactor_0_o_data  [get_bd_pins byte_stream_compactor_0/o_data] \
   [get_bd_pins etm_decoder_0/i_data]
@@ -365,6 +386,8 @@ proc create_hier_cell_decoder { parentCell nameHier } {
   [get_bd_pins stm_decoder_0/i_data]
   connect_bd_net -net byte_stream_compactor_1_o_valid  [get_bd_pins byte_stream_compactor_1/o_valid] \
   [get_bd_pins stm_decoder_0/i_valid]
+  connect_bd_net -net byte_stream_demux_0_o_bytestream_demux_id_error  [get_bd_pins byte_stream_demux_0/o_bytestream_demux_id_error] \
+  [get_bd_pins o_bytestream_demux_id_error]
   connect_bd_net -net byte_stream_demux_0_o_data  [get_bd_pins byte_stream_demux_0/o_data] \
   [get_bd_pins byte_stream_compactor_0/i_data] \
   [get_bd_pins byte_stream_compactor_1/i_data]
@@ -404,6 +427,40 @@ proc create_hier_cell_decoder { parentCell nameHier } {
   [get_bd_pins o_atom_valid2]
   connect_bd_net -net etm_decoder_0_o_atom_valid3  [get_bd_pins etm_decoder_0/o_atom_valid3] \
   [get_bd_pins o_atom_valid3]
+  connect_bd_net -net etm_decoder_0_o_exception_pending0  [get_bd_pins etm_decoder_0/o_exception_pending0] \
+  [get_bd_pins o_exception_pending0]
+  connect_bd_net -net etm_decoder_0_o_exception_pending1  [get_bd_pins etm_decoder_0/o_exception_pending1] \
+  [get_bd_pins o_exception_pending1]
+  connect_bd_net -net etm_decoder_0_o_exception_pending2  [get_bd_pins etm_decoder_0/o_exception_pending2] \
+  [get_bd_pins o_exception_pending2]
+  connect_bd_net -net etm_decoder_0_o_exception_pending3  [get_bd_pins etm_decoder_0/o_exception_pending3] \
+  [get_bd_pins o_exception_pending3]
+  connect_bd_net -net etm_decoder_0_o_exception_type0  [get_bd_pins etm_decoder_0/o_exception_type0] \
+  [get_bd_pins o_exception_type0]
+  connect_bd_net -net etm_decoder_0_o_exception_type1  [get_bd_pins etm_decoder_0/o_exception_type1] \
+  [get_bd_pins o_exception_type1]
+  connect_bd_net -net etm_decoder_0_o_exception_type2  [get_bd_pins etm_decoder_0/o_exception_type2] \
+  [get_bd_pins o_exception_type2]
+  connect_bd_net -net etm_decoder_0_o_exception_type3  [get_bd_pins etm_decoder_0/o_exception_type3] \
+  [get_bd_pins o_exception_type3]
+  connect_bd_net -net etm_decoder_0_o_exception_valid0  [get_bd_pins etm_decoder_0/o_exception_valid0] \
+  [get_bd_pins o_exception_valid0]
+  connect_bd_net -net etm_decoder_0_o_exception_valid1  [get_bd_pins etm_decoder_0/o_exception_valid1] \
+  [get_bd_pins o_exception_valid1]
+  connect_bd_net -net etm_decoder_0_o_exception_valid2  [get_bd_pins etm_decoder_0/o_exception_valid2] \
+  [get_bd_pins o_exception_valid2]
+  connect_bd_net -net etm_decoder_0_o_exception_valid3  [get_bd_pins etm_decoder_0/o_exception_valid3] \
+  [get_bd_pins o_exception_valid3]
+  connect_bd_net -net etm_decoder_0_o_pre_exception_addr0  [get_bd_pins etm_decoder_0/o_pre_exception_addr0] \
+  [get_bd_pins o_pre_exception_addr0]
+  connect_bd_net -net etm_decoder_0_o_pre_exception_addr1  [get_bd_pins etm_decoder_0/o_pre_exception_addr1] \
+  [get_bd_pins o_pre_exception_addr1]
+  connect_bd_net -net etm_decoder_0_o_pre_exception_addr2  [get_bd_pins etm_decoder_0/o_pre_exception_addr2] \
+  [get_bd_pins o_pre_exception_addr2]
+  connect_bd_net -net etm_decoder_0_o_pre_exception_addr3  [get_bd_pins etm_decoder_0/o_pre_exception_addr3] \
+  [get_bd_pins o_pre_exception_addr3]
+  connect_bd_net -net frame_deformatter_0_o_bytestream_gen_error  [get_bd_pins frame_deformatter_0/o_bytestream_gen_error] \
+  [get_bd_pins o_bytestream_gen_error]
   connect_bd_net -net frame_deformatter_0_o_data  [get_bd_pins frame_deformatter_0/o_data] \
   [get_bd_pins byte_stream_demux_0/i_data]
   connect_bd_net -net frame_deformatter_0_o_ids  [get_bd_pins frame_deformatter_0/o_ids] \
@@ -414,10 +471,19 @@ proc create_hier_cell_decoder { parentCell nameHier } {
   [get_bd_pins byte_stream_demux_0/i_valid]
   connect_bd_net -net frame_generator_0_o_frame  [get_bd_pins frame_generator_0/o_frame] \
   [get_bd_pins frame_deformatter_0/i_frame]
+  connect_bd_net -net frame_generator_0_o_frame_error  [get_bd_pins frame_generator_0/o_frame_error] \
+  [get_bd_pins o_frame_error]
   connect_bd_net -net frame_generator_0_o_valid_frame  [get_bd_pins frame_generator_0/o_valid_frame] \
   [get_bd_pins frame_deformatter_0/i_valid_frame]
   connect_bd_net -net i_data_1  [get_bd_pins i_data] \
   [get_bd_pins frame_generator_0/i_data]
+  connect_bd_net -net i_soft_reset_1  [get_bd_pins i_soft_reset] \
+  [get_bd_pins byte_stream_compactor_0/i_soft_reset] \
+  [get_bd_pins byte_stream_compactor_1/i_soft_reset] \
+  [get_bd_pins byte_stream_demux_0/i_soft_reset] \
+  [get_bd_pins frame_deformatter_0/i_soft_reset] \
+  [get_bd_pins frame_generator_0/i_soft_reset] \
+  [get_bd_pins etm_decoder_0/i_soft_reset]
 
   # Restore current instance
   current_bd_instance $oldCurInst
@@ -1605,7 +1671,7 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
   set axi_smc [ create_bd_cell -type ip -vlnv xilinx.com:ip:smartconnect:1.0 axi_smc ]
   set_property -dict [list \
     CONFIG.NUM_CLKS {2} \
-    CONFIG.NUM_MI {4} \
+    CONFIG.NUM_MI {5} \
     CONFIG.NUM_SI {1} \
   ] $axi_smc
 
@@ -1661,6 +1727,17 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
   # Create instance: decoder
   create_hier_cell_decoder [current_bd_instance .] decoder
 
+  # Create instance: axi_decoder_errors, and set properties
+  set block_name axi_errors
+  set block_cell_name axi_decoder_errors
+  if { [catch {set axi_decoder_errors [create_bd_cell -type module -reference $block_name $block_cell_name] } errmsg] } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2095 -severity "ERROR" "Unable to add referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
+     return 1
+   } elseif { $axi_decoder_errors eq "" } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2096 -severity "ERROR" "Unable to referenced block <$block_name>. Please add the files for ${block_name}'s definition into the project."}
+     return 1
+   }
+  
   # Create interface connections
   connect_bd_intf_net -intf_net axi_dma_0_M_AXI_S2MM [get_bd_intf_pins axi_dma/M_AXI_S2MM] [get_bd_intf_pins axi_smc_1/S00_AXI]
   connect_bd_intf_net -intf_net axi_smc_1_M00_AXI [get_bd_intf_pins axi_smc_1/M00_AXI] [get_bd_intf_pins zynq_ultra_ps_pl/S_AXI_HP0_FPD]
@@ -1668,10 +1745,13 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
   connect_bd_intf_net -intf_net axi_smc_M01_AXI [get_bd_intf_pins axi_smc/M01_AXI] [get_bd_intf_pins bitmap_reader_bram/s_axi]
   connect_bd_intf_net -intf_net axi_smc_M02_AXI [get_bd_intf_pins axi_smc/M02_AXI] [get_bd_intf_pins decoder_stats_lut/s_axi]
   connect_bd_intf_net -intf_net axi_smc_M03_AXI [get_bd_intf_pins axi_smc/M03_AXI] [get_bd_intf_pins edge_extractor/s_axi]
+  connect_bd_intf_net -intf_net axi_smc_M04_AXI [get_bd_intf_pins axi_smc/M04_AXI] [get_bd_intf_pins axi_decoder_errors/s_axi]
   connect_bd_intf_net -intf_net bitmap_reader_bram_0_m_axis [get_bd_intf_pins bitmap_reader_bram/m_axis] [get_bd_intf_pins axi_dma/S_AXIS_S2MM]
   connect_bd_intf_net -intf_net zynq_ultra_ps_pl_M_AXI_HPM0_LPD [get_bd_intf_pins zynq_ultra_ps_pl/M_AXI_HPM0_LPD] [get_bd_intf_pins axi_smc/S00_AXI]
 
   # Create port connections
+  connect_bd_net -net axi_decoder_errors_o_soft_reset  [get_bd_pins axi_decoder_errors/o_soft_reset] \
+  [get_bd_pins decoder/i_soft_reset]
   connect_bd_net -net axi_dma_s2mm_introut  [get_bd_pins axi_dma/s2mm_introut] \
   [get_bd_pins zynq_ultra_ps_pl/pl_ps_irq0]
   connect_bd_net -net bitmap_reader_bram_0_bram_addr  [get_bd_pins bitmap_reader_bram/bram_addr] \
@@ -1683,8 +1763,8 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
   connect_bd_net -net bitmap_reader_bram_0_bram_we  [get_bd_pins bitmap_reader_bram/bram_we] \
   [get_bd_pins bram/web]
   connect_bd_net -net bitmap_reader_bram_0_o_fifo_freeze_req  [get_bd_pins bitmap_reader_bram/o_fifo_freeze_req] \
-  [get_bd_pins edge_extractor/i_freeze_request] \
-  [get_bd_pins bitmap_writer_bram/i_freeze_request]
+  [get_bd_pins bitmap_writer_bram/i_freeze_request] \
+  [get_bd_pins edge_extractor/i_freeze_request]
   connect_bd_net -net bitmap_writer_bram_0_bram_addr  [get_bd_pins bitmap_writer_bram/bram_addr] \
   [get_bd_pins bram/addra]
   connect_bd_net -net bitmap_writer_bram_0_bram_din  [get_bd_pins bitmap_writer_bram/bram_din] \
@@ -1749,6 +1829,44 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
   connect_bd_net -net decoder_o_atom_valid3  [get_bd_pins decoder/o_atom_valid3] \
   [get_bd_pins decoder_stats_lut/i_atom_valid3] \
   [get_bd_pins edge_extractor/i_atom_valid3]
+  connect_bd_net -net decoder_o_bytestream_demux_id_error  [get_bd_pins decoder/o_bytestream_demux_id_error] \
+  [get_bd_pins axi_decoder_errors/i_bytestream_demux_id_error]
+  connect_bd_net -net decoder_o_bytestream_gen_error  [get_bd_pins decoder/o_bytestream_gen_error] \
+  [get_bd_pins axi_decoder_errors/i_bytestream_gen_error]
+  connect_bd_net -net decoder_o_exception_pending0  [get_bd_pins decoder/o_exception_pending0] \
+  [get_bd_pins edge_extractor/i_exception_pending0]
+  connect_bd_net -net decoder_o_exception_pending1  [get_bd_pins decoder/o_exception_pending1] \
+  [get_bd_pins edge_extractor/i_exception_pending1]
+  connect_bd_net -net decoder_o_exception_pending2  [get_bd_pins decoder/o_exception_pending2] \
+  [get_bd_pins edge_extractor/i_exception_pending2]
+  connect_bd_net -net decoder_o_exception_pending3  [get_bd_pins decoder/o_exception_pending3] \
+  [get_bd_pins edge_extractor/i_exception_pending3]
+  connect_bd_net -net decoder_o_exception_type0  [get_bd_pins decoder/o_exception_type0] \
+  [get_bd_pins edge_extractor/i_exception_type0]
+  connect_bd_net -net decoder_o_exception_type1  [get_bd_pins decoder/o_exception_type1] \
+  [get_bd_pins edge_extractor/i_exception_type1]
+  connect_bd_net -net decoder_o_exception_type2  [get_bd_pins decoder/o_exception_type2] \
+  [get_bd_pins edge_extractor/i_exception_type2]
+  connect_bd_net -net decoder_o_exception_type3  [get_bd_pins decoder/o_exception_type3] \
+  [get_bd_pins edge_extractor/i_exception_type3]
+  connect_bd_net -net decoder_o_exception_valid0  [get_bd_pins decoder/o_exception_valid0] \
+  [get_bd_pins edge_extractor/i_exception_valid0]
+  connect_bd_net -net decoder_o_exception_valid1  [get_bd_pins decoder/o_exception_valid1] \
+  [get_bd_pins edge_extractor/i_exception_valid1]
+  connect_bd_net -net decoder_o_exception_valid2  [get_bd_pins decoder/o_exception_valid2] \
+  [get_bd_pins edge_extractor/i_exception_valid2]
+  connect_bd_net -net decoder_o_exception_valid3  [get_bd_pins decoder/o_exception_valid3] \
+  [get_bd_pins edge_extractor/i_exception_valid3]
+  connect_bd_net -net decoder_o_frame_error  [get_bd_pins decoder/o_frame_error] \
+  [get_bd_pins axi_decoder_errors/i_frame_error]
+  connect_bd_net -net decoder_o_pre_exception_addr0  [get_bd_pins decoder/o_pre_exception_addr0] \
+  [get_bd_pins edge_extractor/i_pre_exception_addr0]
+  connect_bd_net -net decoder_o_pre_exception_addr1  [get_bd_pins decoder/o_pre_exception_addr1] \
+  [get_bd_pins edge_extractor/i_pre_exception_addr1]
+  connect_bd_net -net decoder_o_pre_exception_addr2  [get_bd_pins decoder/o_pre_exception_addr2] \
+  [get_bd_pins edge_extractor/i_pre_exception_addr2]
+  connect_bd_net -net decoder_o_pre_exception_addr3  [get_bd_pins decoder/o_pre_exception_addr3] \
+  [get_bd_pins edge_extractor/i_pre_exception_addr3]
   connect_bd_net -net edge_extractor_0_o_empty  [get_bd_pins edge_extractor/o_empty] \
   [get_bd_pins bitmap_reader_bram/i_fifo_empty]
   connect_bd_net -net edge_extractor_0_o_index  [get_bd_pins edge_extractor/o_index] \
@@ -1762,6 +1880,7 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
   [get_bd_pins decoder_stats_lut/aresetn] \
   [get_bd_pins bitmap_reader_bram/aresetn] \
   [get_bd_pins bitmap_writer_bram/aresetn] \
+  [get_bd_pins axi_decoder_errors/aresetn] \
   [get_bd_pins edge_extractor/aresetn]
   connect_bd_net -net rst_zynq_ultra_ps_pl_250M_peripheral_aresetn  [get_bd_pins axi_lite_reset/peripheral_aresetn] \
   [get_bd_pins axi_smc/aresetn]
@@ -1778,6 +1897,7 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
   [get_bd_pins decoder_stats_lut/aclk] \
   [get_bd_pins bitmap_reader_bram/aclk] \
   [get_bd_pins bitmap_writer_bram/aclk] \
+  [get_bd_pins axi_decoder_errors/aclk] \
   [get_bd_pins edge_extractor/aclk]
   connect_bd_net -net zynq_ultra_ps_pl_pl_clk1  [get_bd_pins zynq_ultra_ps_pl/pl_clk1] \
   [get_bd_pins zynq_ultra_ps_pl/saxihp0_fpd_aclk] \
@@ -1794,6 +1914,7 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
 
   # Create address segments
   assign_bd_address -offset 0x80000000 -range 0x00010000 -with_name SEG_axi_dma_0_Reg -target_address_space [get_bd_addr_spaces zynq_ultra_ps_pl/Data] [get_bd_addr_segs axi_dma/S_AXI_LITE/Reg] -force
+  assign_bd_address -offset 0x80022000 -range 0x00001000 -with_name SEG_axi_errors_0_reg0 -target_address_space [get_bd_addr_spaces zynq_ultra_ps_pl/Data] [get_bd_addr_segs axi_decoder_errors/s_axi/reg0] -force
   assign_bd_address -offset 0x80010000 -range 0x00010000 -with_name SEG_bitmap_reader_bram_0_reg0 -target_address_space [get_bd_addr_spaces zynq_ultra_ps_pl/Data] [get_bd_addr_segs bitmap_reader_bram/s_axi/reg0] -force
   assign_bd_address -offset 0x80020000 -range 0x00001000 -with_name SEG_decoder_stats_lut_0_reg0 -target_address_space [get_bd_addr_spaces zynq_ultra_ps_pl/Data] [get_bd_addr_segs decoder_stats_lut/s_axi/reg0] -force
   assign_bd_address -offset 0x80021000 -range 0x00001000 -with_name SEG_edge_extractor_0_reg0 -target_address_space [get_bd_addr_spaces zynq_ultra_ps_pl/Data] [get_bd_addr_segs edge_extractor/s_axi/reg0] -force

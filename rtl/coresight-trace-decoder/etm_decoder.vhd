@@ -47,48 +47,58 @@ entity etm_decoder is
         aclk : in std_logic;
         aresetn : in std_logic;
 
+        i_soft_reset : in std_logic;
+
         i_data : in std_logic_vector(31 downto 0);
         i_valid: in std_logic;
 
-        o_atom_valid0      : out std_logic;
-        o_exception_valid0 : out std_logic;
-        o_ts0              : out std_logic_vector(63 downto 0);
-        o_address_reg_0_0  : out std_logic_vector(63 downto 0);
-        o_ctxt_id0         : out std_logic_vector(CID_SIZE_BYTE * 8 - 1 downto 0);
-        o_vmid0            : out std_logic_vector(VMID_SIZE_BYTE * 8 - 1 downto 0);
-        o_atom_elements0   : out std_logic_vector(ATOM_ELTS_SIZE - 1 downto 0);
-        o_atom_nb0         : out unsigned(ATOM_NB_SIZE - 1 downto 0);
-        o_exception_type0  : out std_logic_vector(EXC_TYPE_SIZE - 1 downto 0);
+        o_atom_valid0         : out std_logic;
+        o_exception_valid0    : out std_logic;
+        o_ts0                 : out std_logic_vector(63 downto 0);
+        o_address_reg_0_0     : out std_logic_vector(63 downto 0);
+        o_ctxt_id0            : out std_logic_vector(CID_SIZE_BYTE * 8 - 1 downto 0);
+        o_vmid0               : out std_logic_vector(VMID_SIZE_BYTE * 8 - 1 downto 0);
+        o_atom_elements0      : out std_logic_vector(ATOM_ELTS_SIZE - 1 downto 0);
+        o_atom_nb0            : out unsigned(ATOM_NB_SIZE - 1 downto 0);
+        o_exception_type0     : out std_logic_vector(EXC_TYPE_SIZE - 1 downto 0);
+        o_exception_pending0  : out std_logic;
+        o_pre_exception_addr0 : out std_logic_vector(63 downto 0);
 
-        o_atom_valid1      : out std_logic;
-        o_exception_valid1 : out std_logic;
-        o_ts1              : out std_logic_vector(63 downto 0);
-        o_address_reg_0_1  : out std_logic_vector(63 downto 0);
-        o_ctxt_id1         : out std_logic_vector(CID_SIZE_BYTE * 8 - 1  downto 0);
-        o_vmid1            : out std_logic_vector(VMID_SIZE_BYTE * 8 - 1 downto 0);
-        o_atom_elements1   : out std_logic_vector(ATOM_ELTS_SIZE - 1 downto 0);
-        o_atom_nb1         : out unsigned(ATOM_NB_SIZE - 1 downto 0);
-        o_exception_type1  : out std_logic_vector(EXC_TYPE_SIZE - 1 downto 0);
+        o_atom_valid1         : out std_logic;
+        o_exception_valid1    : out std_logic;
+        o_ts1                 : out std_logic_vector(63 downto 0);
+        o_address_reg_0_1     : out std_logic_vector(63 downto 0);
+        o_ctxt_id1            : out std_logic_vector(CID_SIZE_BYTE * 8 - 1  downto 0);
+        o_vmid1               : out std_logic_vector(VMID_SIZE_BYTE * 8 - 1 downto 0);
+        o_atom_elements1      : out std_logic_vector(ATOM_ELTS_SIZE - 1 downto 0);
+        o_atom_nb1            : out unsigned(ATOM_NB_SIZE - 1 downto 0);
+        o_exception_type1     : out std_logic_vector(EXC_TYPE_SIZE - 1 downto 0);
+        o_exception_pending1  : out std_logic;
+        o_pre_exception_addr1 : out std_logic_vector(63 downto 0);
 
-        o_atom_valid2      : out std_logic;
-        o_exception_valid2 : out std_logic;
-        o_ts2              : out std_logic_vector(63 downto 0);
-        o_address_reg_0_2  : out std_logic_vector(63 downto 0);
-        o_ctxt_id2         : out std_logic_vector(CID_SIZE_BYTE * 8 - 1 downto 0);
-        o_vmid2            : out std_logic_vector(VMID_SIZE_BYTE * 8 - 1 downto 0);
-        o_atom_elements2   : out std_logic_vector(ATOM_ELTS_SIZE - 1 downto 0);
-        o_atom_nb2         : out unsigned(ATOM_NB_SIZE - 1 downto 0);
-        o_exception_type2  : out std_logic_vector(EXC_TYPE_SIZE - 1 downto 0);
+        o_atom_valid2         : out std_logic;
+        o_exception_valid2    : out std_logic;
+        o_ts2                 : out std_logic_vector(63 downto 0);
+        o_address_reg_0_2     : out std_logic_vector(63 downto 0);
+        o_ctxt_id2            : out std_logic_vector(CID_SIZE_BYTE * 8 - 1 downto 0);
+        o_vmid2               : out std_logic_vector(VMID_SIZE_BYTE * 8 - 1 downto 0);
+        o_atom_elements2      : out std_logic_vector(ATOM_ELTS_SIZE - 1 downto 0);
+        o_atom_nb2            : out unsigned(ATOM_NB_SIZE - 1 downto 0);
+        o_exception_type2     : out std_logic_vector(EXC_TYPE_SIZE - 1 downto 0);
+        o_exception_pending2  : out std_logic;
+        o_pre_exception_addr2 : out std_logic_vector(63 downto 0);
 
-        o_atom_valid3      : out std_logic;
-        o_exception_valid3 : out std_logic;
-        o_ts3              : out std_logic_vector(63 downto 0);
-        o_address_reg_0_3  : out std_logic_vector(63 downto 0);
-        o_ctxt_id3         : out std_logic_vector(CID_SIZE_BYTE * 8 - 1 downto 0);
-        o_vmid3            : out std_logic_vector(VMID_SIZE_BYTE * 8 - 1 downto 0);
-        o_atom_elements3   : out std_logic_vector(ATOM_ELTS_SIZE - 1 downto 0);
-        o_atom_nb3         : out unsigned(ATOM_NB_SIZE - 1 downto 0);
-        o_exception_type3  : out std_logic_vector(EXC_TYPE_SIZE - 1 downto 0)
+        o_atom_valid3         : out std_logic;
+        o_exception_valid3    : out std_logic;
+        o_ts3                 : out std_logic_vector(63 downto 0);
+        o_address_reg_0_3     : out std_logic_vector(63 downto 0);
+        o_ctxt_id3            : out std_logic_vector(CID_SIZE_BYTE * 8 - 1 downto 0);
+        o_vmid3               : out std_logic_vector(VMID_SIZE_BYTE * 8 - 1 downto 0);
+        o_atom_elements3      : out std_logic_vector(ATOM_ELTS_SIZE - 1 downto 0);
+        o_atom_nb3            : out unsigned(ATOM_NB_SIZE - 1 downto 0);
+        o_exception_type3     : out std_logic_vector(EXC_TYPE_SIZE - 1 downto 0);
+        o_exception_pending3  : out std_logic;
+        o_pre_exception_addr3 : out std_logic_vector(63 downto 0)
     );
 end etm_decoder;
 
@@ -137,12 +147,15 @@ architecture Behavioral of etm_decoder is
     end record;
 
     type OutputState is record
-        timestamp       : std_logic_vector(63 downto 0);
-        atom_valid      : std_logic;
-        atom_elements   : std_logic_vector(ATOM_ELTS_SIZE - 1 downto 0);
-        atom_nb         : integer;
-        exception_type  : std_logic_vector(EXC_TYPE_SIZE - 1 downto 0);
-        exception_valid : std_logic;
+        timestamp          : std_logic_vector(63 downto 0);
+        atom_valid         : std_logic;
+        atom_elements      : std_logic_vector(ATOM_ELTS_SIZE - 1 downto 0);
+        atom_nb            : integer;
+        exception_valid    : std_logic;
+        exception_type     : std_logic_vector(EXC_TYPE_SIZE - 1 downto 0);
+        exception_pending  : std_logic;
+        pre_exception_addr : std_logic_vector(63 downto 0);
+
     end record;
 
     -- Trace State from Arm Embedded Trace Macrocell Architecture Specification ETMv4.0 to ETMv4.4, chapter 6.2
@@ -425,6 +438,7 @@ architecture Behavioral of etm_decoder is
     pure function handleStreamStateExtension(in_stream_state : StreamState; preprocessing_state : PreprocessingState; byte : std_logic_vector(7 downto 0)) return StreamState is
     variable out_stream_state : StreamState;
     begin
+        out_stream_state := in_stream_state;
         case byte is
             when "00000000" => -- async, fixed size of max index
                 out_stream_state.header            := byte;
@@ -451,6 +465,7 @@ architecture Behavioral of etm_decoder is
     pure function handleStreamStatePayloadFixedSize(in_stream_state : StreamState; preprocessing_state : PreprocessingState; byte : std_logic_vector(7 downto 0)) return StreamState is
     variable out_stream_state : StreamState;
     begin
+        out_stream_state := in_stream_state;
         if in_stream_state.payload_index = in_stream_state.payload_max_index then
             -- Payload index is the max, we switch to the next stream mode,
             -- update the header, and other values.
@@ -505,6 +520,7 @@ architecture Behavioral of etm_decoder is
     pure function handleStreamStatePayloadContinuous(in_stream_state : StreamState; preprocessing_state : PreprocessingState; byte : std_logic_vector(7 downto 0)) return StreamState is
     variable out_stream_state : StreamState;
     begin
+        out_stream_state := in_stream_state;
         if in_stream_state.payload_index = in_stream_state.payload_max_index then
             -- Payload index is the max, we switch to the next stream mode,
             -- update the header, and other values.
@@ -582,6 +598,7 @@ architecture Behavioral of etm_decoder is
     pure function handleStreamStatePayloadContinuousUnbounded(in_stream_state : StreamState; preprocessing_state : PreprocessingState; byte : std_logic_vector(7 downto 0)) return StreamState is
     variable out_stream_state : StreamState;
     begin
+        out_stream_state := in_stream_state;
         -- Note: Same as the bounded version but the continuation bit is the ONLY stop reason
         if byte(7) = '0' then -- Continuation bit low, this is the last byte of the payload
             -- /!\ DUPLICATED FOR TIMING REASONS /!\
@@ -639,6 +656,7 @@ architecture Behavioral of etm_decoder is
     pure function handleStreamStateHeader(in_stream_state : StreamState; preprocessing_state : PreprocessingState; byte : std_logic_vector(7 downto 0)) return StreamState is
     variable out_stream_state : StreamState;
     begin
+        out_stream_state := in_stream_state;
         case preprocessing_state.header is
 
         when TimestampF1 =>
@@ -771,6 +789,7 @@ architecture Behavioral of etm_decoder is
     pure function handleStreamStateContextInfoMode(in_stream_state : StreamState; preprocessing_state : PreprocessingState; byte : std_logic_vector(7 downto 0)) return StreamState is
     variable out_stream_state : StreamState;
     begin
+        out_stream_state := in_stream_state;
         if byte(7 downto 6) = "00" then -- C low and V low, CID and VMID absent
             out_stream_state.stream_mode  := next_byte_must_be_header;
             out_stream_state.header_t :=  Undefined;
@@ -826,6 +845,7 @@ architecture Behavioral of etm_decoder is
     pure function handleStreamStateTraceInfoPlctlMode(in_stream_state : StreamState; preprocessing_state : PreprocessingState; byte : std_logic_vector(7 downto 0)) return StreamState is
     variable out_stream_state : StreamState;
     begin
+        out_stream_state := in_stream_state;
         -- the docs are a little weird on this one: it suggest that there can be multiple bytes of PLCTL, but at the same time say:
         -- "A trace unit must not output more than 1 PLCTL field in a Trace Info packet" - architecture specification ETVMv4.0 to ETMv4.4,Ch. 6.4
         -- ==> we assume PLTCL is always 1 byte.
@@ -851,7 +871,7 @@ architecture Behavioral of etm_decoder is
             out_stream_state.next_header_t2    := TraceInfoCyct;
 
             out_stream_state.next_stream_mode3       := next_byte_must_be_header;
-            out_stream_state.next_header_t2          := Undefined;
+            out_stream_state.next_header_t3          := Undefined;
             out_stream_state.next_payload_max_index3 := 0;
 
         elsif byte(3 downto 0) = "0001" then
@@ -969,7 +989,7 @@ architecture Behavioral of etm_decoder is
             out_stream_state.header_t    := TraceInfoInfo;
             -- Key
             out_stream_state.next_stream_mode0 := payload_continuous_unbounded;
-            out_stream_state.next_header_t1    := TraceInfoKey;
+            out_stream_state.next_header_t0    := TraceInfoKey;
             -- Spec
             out_stream_state.next_stream_mode1 := payload_continuous_unbounded;
             out_stream_state.next_header_t1    := TraceInfoSpec;
@@ -984,7 +1004,7 @@ architecture Behavioral of etm_decoder is
             out_stream_state.header_t    := TraceInfoKey;
             -- Spec
             out_stream_state.next_stream_mode0 := payload_continuous_unbounded;
-            out_stream_state.next_header_t1    := TraceInfoSpec;
+            out_stream_state.next_header_t0    := TraceInfoSpec;
             -- Cyct
             out_stream_state.next_stream_mode1 := payload_continuous_unbounded;
             out_stream_state.next_header_t1    := TraceInfoCyct;
@@ -999,7 +1019,7 @@ architecture Behavioral of etm_decoder is
             out_stream_state.header_t    := TraceInfoInfo;
             -- Key
             out_stream_state.next_stream_mode0 := payload_continuous_unbounded;
-            out_stream_state.next_header_t1    := TraceInfoKey;
+            out_stream_state.next_header_t0    := TraceInfoKey;
             -- Cyct
             out_stream_state.next_stream_mode1 := payload_continuous_unbounded;
             out_stream_state.next_header_t1    := TraceInfoCyct;
@@ -1014,7 +1034,7 @@ architecture Behavioral of etm_decoder is
             out_stream_state.header_t    := TraceInfoInfo;
             -- Spec
             out_stream_state.next_stream_mode0 := payload_continuous_unbounded;
-            out_stream_state.next_header_t1    := TraceInfoSpec;
+            out_stream_state.next_header_t0    := TraceInfoSpec;
             -- Cyct
             out_stream_state.next_stream_mode1 := payload_continuous_unbounded;
             out_stream_state.next_header_t1    := TraceInfoCyct;
@@ -1033,6 +1053,7 @@ architecture Behavioral of etm_decoder is
     pure function handleStreamState(in_stream_state : StreamState; preprocessing_state : PreprocessingState; byte : std_logic_vector(7 downto 0)) return StreamState is
     variable out_stream_state : StreamState;
     begin
+        out_stream_state := in_stream_state;
         case in_stream_state.stream_mode is
             when extension_mode =>
                 return handleStreamStateExtension(in_stream_state, preprocessing_state, byte);
@@ -1235,9 +1256,9 @@ architecture Behavioral of etm_decoder is
         return res;
     end;
 
-    -------------------
-    -- Short address
-    -------------------
+    ---------------------------------------
+    -- Short address -- upper bits kept
+    ---------------------------------------
 
     pure function get_update_address_7_1_short(addr : std_logic_vector(63 downto 0); byte : std_logic_vector(7 downto 0)) return std_logic_vector is
         variable res : std_logic_vector(63 downto 0);
@@ -1302,9 +1323,9 @@ architecture Behavioral of etm_decoder is
         return res;
     end;
 
-    -------------------
-    -- Long Address
-    -------------------
+    ---------------------------------------
+    -- Long Address -- upper bits zeroed
+    ---------------------------------------
 
     pure function get_update_address_7_1_long(addr : std_logic_vector(63 downto 0); byte : std_logic_vector(7 downto 0)) return std_logic_vector is
     variable res : std_logic_vector(63 downto 0);
@@ -1473,18 +1494,18 @@ architecture Behavioral of etm_decoder is
 
             when LongAddress_32bit_IS0|AddressWithContext_32bit_IS0 =>
                 case stream_state.payload_index is
-                    when 0 => return update_address_8_2_short;
-                    when 1 => return update_address_15_9_short;
-                    when 2 => return update_address_23_16_short;
-                    when others => return update_address_31_24_short;
+                    when 0 => return update_address_8_2_long;
+                    when 1 => return update_address_15_9_long;
+                    when 2 => return update_address_23_16_long;
+                    when others => return update_address_31_24_long;
                 end case;
 
             when LongAddress_32bit_IS1|AddressWithContext_32bit_IS1 =>
                 case stream_state.payload_index is
-                    when 0 => return update_address_7_1_short;
-                    when 1 => return update_address_15_8_short;
-                    when 2 => return update_address_23_16_short;
-                    when others => return update_address_31_24_short;
+                    when 0 => return update_address_7_1_long;
+                    when 1 => return update_address_15_8_long;
+                    when 2 => return update_address_23_16_long;
+                    when others => return update_address_31_24_long;
                 end case;
 
             when LongAddress_64bit_IS0|AddressWithContext_64bit_IS0 =>
@@ -1714,34 +1735,51 @@ architecture Behavioral of etm_decoder is
                 out_trace_state.context_state.context_id        := get_update_contextid_31_24(in_trace_state.context_state.context_id, byte);
 
             when scan_1_atom_element =>
+                -- clear pre-exception address
+                out_trace_state.output_state.exception_pending := '0';
+
                 out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 1 => '0') & byte(0);
                 out_trace_state.output_state.atom_nb       := 1;
                 out_trace_state.output_state.atom_valid    := '1';
 
             when scan_2_atom_elements =>
+                -- clear pre-exception address
+                out_trace_state.output_state.exception_pending := '0';
+
                 out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 2 => '0') & byte(1 downto 0);
                 out_trace_state.output_state.atom_nb       := 2;
                 out_trace_state.output_state.atom_valid    := '1';
 
             when scan_3_atom_elements =>
+                -- clear pre-exception address
+                out_trace_state.output_state.exception_pending := '0';
+
                 out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 3 => '0') & byte(2 downto 0);
                 out_trace_state.output_state.atom_nb       := 3;
                 out_trace_state.output_state.atom_valid    := '1';
 
             when scan_4_atom_elements =>
+                -- clear pre-exception address
+                out_trace_state.output_state.exception_pending := '0';
+
+                -- WARNING: oldest is lsb
                 case byte(1 downto 0) is
+                    -- 1-N  2-E 3-E 4-E
                     when "00" =>
-                        out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 4 => '0') & "0111";
+                        out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 4 => '0') & "1110";
                         out_trace_state.output_state.atom_nb       := 4;
                         out_trace_state.output_state.atom_valid    := '1';
+                    -- 1-N 2-N 3-N 4-N
                     when "01" =>
                         out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 4 => '0') & "0000";
                         out_trace_state.output_state.atom_nb       := 4;
                         out_trace_state.output_state.atom_valid    := '1';
+                    -- 1-E 2-N 3-E 4-N
                     when "10" =>
                         out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 4 => '0') & "0101";
                         out_trace_state.output_state.atom_nb       := 4;
                         out_trace_state.output_state.atom_valid    := '1';
+                    -- 1-N 2-E 3-N 4-E
                     when "11" =>
                         out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 4 => '0') & "1010";
                         out_trace_state.output_state.atom_nb       := 4;
@@ -1754,10 +1792,15 @@ architecture Behavioral of etm_decoder is
                 end case;
 
             when scan_5_atom_elements =>
+                -- clear pre-exception address
+                out_trace_state.output_state.exception_pending := '0';
+
+                -- WARNING: oldest is lsb, does not change much here, only the first encoding
                 atom_f5_code := (byte(5) & byte(1) & byte(0));
                 case atom_f5_code is
+                    -- 1-N 2-E 3-E 4-E 5-E
                     when "101" =>
-                        out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 5 => '0') & "01111";
+                        out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 5 => '0') & "11110";
                         out_trace_state.output_state.atom_nb       := 5;
                         out_trace_state.output_state.atom_valid    := '1';
                     when "001" =>
@@ -1779,26 +1822,35 @@ architecture Behavioral of etm_decoder is
                 end case;
 
             when scan_6_atom_elements =>
-                atom_size := to_integer(unsigned(byte(4 downto 0))) + 3;
+                -- clear pre-exception address
+                out_trace_state.output_state.exception_pending := '0';
+
+                atom_size := to_integer(unsigned(byte(4 downto 0))) + 3 + 1;
 
                 -- Check for max size, 0b10100 or 20 + 3 (1 comes from the A bit)
-                if atom_size > ATOM_ELTS_SIZE - 1 then
-                    atom_size := ATOM_ELTS_SIZE - 1;
+                if atom_size > ATOM_ELTS_SIZE then
+                    atom_size := ATOM_ELTS_SIZE;
                 end if;
 
                 out_trace_state.output_state.atom_elements := (others => '0');
 
                 -- Count of Es
-                out_trace_state.output_state.atom_elements(atom_size - 1 downto 0) := (others => '1');
+                out_trace_state.output_state.atom_elements(atom_size - 2 downto 0) := (others => '1');
                 -- Inverted A bit, 1->N, 0->E
                 out_trace_state.output_state.atom_elements(atom_size - 1) := not byte(5);
 
-                out_trace_state.output_state.atom_nb := atom_size;
-                out_trace_state.output_state.atom_valid    := '1';
+                out_trace_state.output_state.atom_nb    := atom_size;
+                out_trace_state.output_state.atom_valid := '1';
 
             when update_exception_type_4_0 =>
-                out_trace_state.output_state.exception_type  := byte(5 downto 1);
-                out_trace_state.output_state.exception_valid := '1';
+                out_trace_state.output_state.exception_type     := byte(5 downto 1);
+                out_trace_state.output_state.exception_valid    := '1';
+                out_trace_state.output_state.exception_pending  := '1';
+
+                -- Cascading exceptions should keep the initial value of the basic block
+                if in_trace_state.output_state.exception_pending = '0' then
+                    out_trace_state.output_state.pre_exception_addr := in_trace_state.address_state.reg0;
+                end if;
 
             when nop =>
                 -- do nothing
@@ -1862,7 +1914,7 @@ begin
 preprocessing_process : process(aclk)
 begin
      if rising_edge(aclk) then
-        if aresetn = '0'then
+        if aresetn = '0' or i_soft_reset = '1' then
            data_valid_stream_state_stage <= '0';
         else
             -- TODO: Deassert by default?
@@ -1883,10 +1935,25 @@ end process;
 stream_state_process : process(aclk)
 begin
      if rising_edge(aclk) then
-        if aresetn = '0' then
+        if aresetn = '0' or i_soft_reset = '1' then
             -- TODO: Deassert in reset?
             data_valid_action_plan_stage <= '0';
-            stream_state3.stream_mode <= extension_mode;
+            stream_state3.stream_mode            <= extension_mode;
+            stream_state3.header_t               <= Undefined;
+            stream_state3.payload_index          <= 0;
+            stream_state3.payload_max_index      <= 0;
+            stream_state3.next_stream_mode0      <= next_byte_must_be_header;
+            stream_state3.next_stream_mode1      <= next_byte_must_be_header;
+            stream_state3.next_stream_mode2      <= next_byte_must_be_header;
+            stream_state3.next_stream_mode3      <= next_byte_must_be_header;
+            stream_state3.next_header_t0         <= Undefined;
+            stream_state3.next_header_t1         <= Undefined;
+            stream_state3.next_header_t2         <= Undefined;
+            stream_state3.next_header_t3         <= Undefined;
+            stream_state3.next_payload_max_index0 <= 0;
+            stream_state3.next_payload_max_index1 <= 0;
+            stream_state3.next_payload_max_index2 <= 0;
+            stream_state3.next_payload_max_index3 <= 0;
         else
             -- TODO: Deassert by default?
             data_valid_action_plan_stage <= '0';
@@ -1933,9 +2000,13 @@ end process;
 action_plan_process : process(aclk)
 begin
      if rising_edge(aclk) then
-        if aresetn = '0' then
+        if aresetn = '0' or i_soft_reset = '1' then
             -- TODO: Deassert in reset?
             data_valid_action_stage <= '0';
+            action0 <= nop;
+            action1 <= nop;
+            action2 <= nop;
+            action3 <= nop;
         else
             -- TODO: Deassert by default?
             data_valid_action_stage <= '0';
@@ -1957,9 +2028,27 @@ end process;
 trace_state_action_process : process(aclk)
 begin
      if rising_edge(aclk) then
-        if aresetn = '0' then
+        if aresetn = '0' or i_soft_reset = '1' then
             -- TODO: Deassert in reset?
             data_valid_output_stage <= '0';
+            trace_state3.output_state.atom_valid         <= '0';
+            trace_state3.output_state.exception_valid    <= '0';
+            trace_state3.output_state.timestamp          <= (others => '0');
+            trace_state3.output_state.atom_elements      <= (others => '0');
+            trace_state3.output_state.atom_nb            <= 0;
+            trace_state3.output_state.exception_type     <= (others => '0');
+            trace_state3.output_state.exception_pending  <= '0';
+            trace_state3.output_state.pre_exception_addr <= (others => '0');
+
+            trace_state3.address_state.reg0           <= (others => '0');
+            trace_state3.address_state.reg1           <= (others => '0');
+            trace_state3.address_state.reg2           <= (others => '0');
+
+            trace_state3.context_state.vmid       <= (others => '0');
+            trace_state3.context_state.context_id <= (others => '0');
+            trace_state3.context_state.ex_level   <= (others => '0');
+            trace_state3.context_state.security   <= NonSecure;
+            trace_state3.context_state.AArch64    <= false;
         else
             -- TODO: Deassert by default?
             data_valid_output_stage <= '0';
@@ -1994,7 +2083,7 @@ end process;
 output_process : process(aclk)
 begin
      if rising_edge(aclk) then
-        if aresetn = '0'then
+        if aresetn = '0' or i_soft_reset = '1' then
             o_atom_valid0 <= '0';
             o_atom_valid1 <= '0';
             o_atom_valid2 <= '0';
@@ -2015,45 +2104,53 @@ begin
             o_exception_valid3 <= '0';
 
             if data_valid_output_stage = '1' then
-                o_address_reg_0_0  <= trace_state0.address_state.reg0;
-                o_ts0              <= trace_state0.output_state.timestamp;
-                o_vmid0            <= trace_state0.context_state.vmid;
-                o_ctxt_id0         <= trace_state0.context_state.context_id;
-                o_atom_elements0   <= trace_state0.output_state.atom_elements;
-                o_atom_nb0         <= to_unsigned(trace_state0.output_state.atom_nb, ATOM_NB_SIZE);
-                o_exception_type0  <= trace_state0.output_state.exception_type;
-                o_atom_valid0      <= trace_state0.output_state.atom_valid;
-                o_exception_valid0 <= trace_state0.output_state.exception_valid;
+                o_address_reg_0_0     <= trace_state0.address_state.reg0;
+                o_ts0                 <= trace_state0.output_state.timestamp;
+                o_vmid0               <= trace_state0.context_state.vmid;
+                o_ctxt_id0            <= trace_state0.context_state.context_id;
+                o_atom_elements0      <= trace_state0.output_state.atom_elements;
+                o_atom_nb0            <= to_unsigned(trace_state0.output_state.atom_nb, ATOM_NB_SIZE);
+                o_exception_type0     <= trace_state0.output_state.exception_type;
+                o_atom_valid0         <= trace_state0.output_state.atom_valid;
+                o_exception_valid0    <= trace_state0.output_state.exception_valid;
+                o_exception_pending0  <= trace_state0.output_state.exception_pending;
+                o_pre_exception_addr0 <= trace_state0.output_state.pre_exception_addr;
 
-                o_address_reg_0_1  <= trace_state1.address_state.reg0;
-                o_ts1              <= trace_state1.output_state.timestamp;
-                o_vmid1            <= trace_state1.context_state.vmid;
-                o_ctxt_id1         <= trace_state1.context_state.context_id;
-                o_atom_elements1   <= trace_state1.output_state.atom_elements;
-                o_atom_nb1         <= to_unsigned(trace_state1.output_state.atom_nb, ATOM_NB_SIZE);
-                o_exception_type1  <= trace_state1.output_state.exception_type;
-                o_atom_valid1      <= trace_state1.output_state.atom_valid;
-                o_exception_valid1 <= trace_state1.output_state.exception_valid;
+                o_address_reg_0_1     <= trace_state1.address_state.reg0;
+                o_ts1                 <= trace_state1.output_state.timestamp;
+                o_vmid1               <= trace_state1.context_state.vmid;
+                o_ctxt_id1            <= trace_state1.context_state.context_id;
+                o_atom_elements1      <= trace_state1.output_state.atom_elements;
+                o_atom_nb1            <= to_unsigned(trace_state1.output_state.atom_nb, ATOM_NB_SIZE);
+                o_exception_type1     <= trace_state1.output_state.exception_type;
+                o_atom_valid1         <= trace_state1.output_state.atom_valid;
+                o_exception_valid1    <= trace_state1.output_state.exception_valid;
+                o_exception_pending1  <= trace_state1.output_state.exception_pending;
+                o_pre_exception_addr1 <= trace_state1.output_state.pre_exception_addr;
 
-                o_address_reg_0_2  <= trace_state2.address_state.reg0;
-                o_ts2              <= trace_state2.output_state.timestamp;
-                o_vmid2            <= trace_state2.context_state.vmid;
-                o_ctxt_id2         <= trace_state2.context_state.context_id;
-                o_atom_elements2   <= trace_state2.output_state.atom_elements;
-                o_atom_nb2         <= to_unsigned(trace_state2.output_state.atom_nb, ATOM_NB_SIZE);
-                o_exception_type2  <= trace_state2.output_state.exception_type;
-                o_atom_valid2      <= trace_state2.output_state.atom_valid;
-                o_exception_valid2 <= trace_state2.output_state.exception_valid;
+                o_address_reg_0_2     <= trace_state2.address_state.reg0;
+                o_ts2                 <= trace_state2.output_state.timestamp;
+                o_vmid2               <= trace_state2.context_state.vmid;
+                o_ctxt_id2            <= trace_state2.context_state.context_id;
+                o_atom_elements2      <= trace_state2.output_state.atom_elements;
+                o_atom_nb2            <= to_unsigned(trace_state2.output_state.atom_nb, ATOM_NB_SIZE);
+                o_exception_type2     <= trace_state2.output_state.exception_type;
+                o_atom_valid2         <= trace_state2.output_state.atom_valid;
+                o_exception_valid2    <= trace_state2.output_state.exception_valid;
+                o_exception_pending2  <= trace_state2.output_state.exception_pending;
+                o_pre_exception_addr2 <= trace_state2.output_state.pre_exception_addr;
 
-                o_address_reg_0_3  <= trace_state3.address_state.reg0;
-                o_ts3              <= trace_state3.output_state.timestamp;
-                o_vmid3            <= trace_state3.context_state.vmid;
-                o_ctxt_id3         <= trace_state3.context_state.context_id;
-                o_atom_elements3   <= trace_state3.output_state.atom_elements;
-                o_atom_nb3         <= to_unsigned(trace_state3.output_state.atom_nb, ATOM_NB_SIZE);
-                o_exception_type3  <= trace_state3.output_state.exception_type;
-                o_atom_valid3      <= trace_state3.output_state.atom_valid;
-                o_exception_valid3 <= trace_state3.output_state.exception_valid;
+                o_address_reg_0_3     <= trace_state3.address_state.reg0;
+                o_ts3                 <= trace_state3.output_state.timestamp;
+                o_vmid3               <= trace_state3.context_state.vmid;
+                o_ctxt_id3            <= trace_state3.context_state.context_id;
+                o_atom_elements3      <= trace_state3.output_state.atom_elements;
+                o_atom_nb3            <= to_unsigned(trace_state3.output_state.atom_nb, ATOM_NB_SIZE);
+                o_exception_type3     <= trace_state3.output_state.exception_type;
+                o_atom_valid3         <= trace_state3.output_state.atom_valid;
+                o_exception_valid3    <= trace_state3.output_state.exception_valid;
+                o_exception_pending3  <= trace_state3.output_state.exception_pending;
+                o_pre_exception_addr3 <= trace_state3.output_state.pre_exception_addr;
             end if;
         end if;
      end if;
