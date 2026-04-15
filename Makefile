@@ -13,6 +13,9 @@ ifeq ($(PROJECT),unset)
 $(error PROJECT not set, please specify the name of the target project)
 endif
 
+# update if you want the GUI changes propagated to the tcl
+NO_UPDATE ?= 0
+
 # Plnx project for boot creation
 PLNX_PROJECT ?=
 
@@ -47,7 +50,11 @@ new:
 	sed -i 's/base_zynq/$(PROJECT)/g' bd/$(PROJECT).tcl
 
 # -- vivado
-project: update
+project:
+ifeq ($(NO_UPDATE),0)
+	PROJECT=$(PROJECT) PROJECT_ROOT=$(PROJECT_ROOT) \
+	$(RUN_VIVADO) $(SCRIPTS_DIR)/vivado/update_bd.tcl
+endif
 	PROJECT=$(PROJECT) PROJECT_ROOT=$(PROJECT_ROOT) PART_NAME=$(PART_NAME) BOARD_NAME=$(BOARD_NAME) \
 	$(RUN_VIVADO) $(SCRIPTS_DIR)/vivado/create_project.tcl
 
