@@ -26,25 +26,41 @@ entity edge_extractor is
         aresetn  : in  std_logic;
 
         -- Inputs from ETM decoder (4 sequential ports)
-        i_atom_valid0     : in std_logic;
-        i_address_reg_0_0 : in std_logic_vector(63 downto 0);
-        i_atom_elements0  : in std_logic_vector(ATOM_ELTS_SIZE-1 downto 0);
-        i_atom_nb0        : in unsigned(ATOM_NB_SIZE-1 downto 0);
+        i_atom_valid0         : in std_logic;
+        i_address_reg_0_0     : in std_logic_vector(63 downto 0);
+        i_atom_elements0      : in std_logic_vector(ATOM_ELTS_SIZE-1 downto 0);
+        i_atom_nb0            : in unsigned(ATOM_NB_SIZE-1 downto 0);
+        i_exception_valid0    : in std_logic;
+        i_exception_type0     : in std_logic_vector(EXC_TYPE_SIZE-1 downto 0);
+        i_exception_pending0  : in std_logic;
+        i_pre_exception_addr0 : in std_logic_vector(63 downto 0);
 
-        i_atom_valid1     : in std_logic;
-        i_address_reg_0_1 : in std_logic_vector(63 downto 0);
-        i_atom_elements1  : in std_logic_vector(ATOM_ELTS_SIZE-1 downto 0);
-        i_atom_nb1        : in unsigned(ATOM_NB_SIZE-1 downto 0);
+        i_atom_valid1         : in std_logic;
+        i_address_reg_0_1     : in std_logic_vector(63 downto 0);
+        i_atom_elements1      : in std_logic_vector(ATOM_ELTS_SIZE-1 downto 0);
+        i_atom_nb1            : in unsigned(ATOM_NB_SIZE-1 downto 0);
+        i_exception_valid1    : in std_logic;
+        i_exception_type1     : in std_logic_vector(EXC_TYPE_SIZE-1 downto 0);
+        i_exception_pending1  : in std_logic;
+        i_pre_exception_addr1 : in std_logic_vector(63 downto 0);
 
-        i_atom_valid2     : in std_logic;
-        i_address_reg_0_2 : in std_logic_vector(63 downto 0);
-        i_atom_elements2  : in std_logic_vector(ATOM_ELTS_SIZE-1 downto 0);
-        i_atom_nb2        : in unsigned(ATOM_NB_SIZE-1 downto 0);
+        i_atom_valid2         : in std_logic;
+        i_address_reg_0_2     : in std_logic_vector(63 downto 0);
+        i_atom_elements2      : in std_logic_vector(ATOM_ELTS_SIZE-1 downto 0);
+        i_atom_nb2            : in unsigned(ATOM_NB_SIZE-1 downto 0);
+        i_exception_valid2    : in std_logic;
+        i_exception_type2     : in std_logic_vector(EXC_TYPE_SIZE-1 downto 0);
+        i_exception_pending2  : in std_logic;
+        i_pre_exception_addr2 : in std_logic_vector(63 downto 0);
 
-        i_atom_valid3     : in std_logic;
-        i_address_reg_0_3 : in std_logic_vector(63 downto 0);
-        i_atom_elements3  : in std_logic_vector(ATOM_ELTS_SIZE-1 downto 0);
-        i_atom_nb3        : in unsigned(ATOM_NB_SIZE-1 downto 0);
+        i_atom_valid3         : in std_logic;
+        i_address_reg_0_3     : in std_logic_vector(63 downto 0);
+        i_atom_elements3      : in std_logic_vector(ATOM_ELTS_SIZE-1 downto 0);
+        i_atom_nb3            : in unsigned(ATOM_NB_SIZE-1 downto 0);
+        i_exception_valid3    : in std_logic;
+        i_exception_type3     : in std_logic_vector(EXC_TYPE_SIZE-1 downto 0);
+        i_exception_pending3  : in std_logic;
+        i_pre_exception_addr3 : in std_logic_vector(63 downto 0);
 
         -- Freeze request
         i_freeze_request  : in std_logic;
@@ -110,11 +126,13 @@ architecture Behavioral of edge_extractor is
     ---------------
 
     procedure process_atom(
-        atom_valid : in std_logic;
-        addr       : in std_logic_vector(63 downto 0);
-        atom_elts  : in std_logic_vector(ATOM_ELTS_SIZE-1 downto 0);
-        atom_nb    : in unsigned(ATOM_NB_SIZE-1 downto 0);
-        freeze_req : in std_logic;
+        atom_valid         : in std_logic;
+        addr               : in std_logic_vector(63 downto 0);
+        atom_elts          : in std_logic_vector(ATOM_ELTS_SIZE-1 downto 0);
+        atom_nb            : in unsigned(ATOM_NB_SIZE-1 downto 0);
+        exception_pending  : in std_logic;
+        pre_exception_addr : in std_logic_vector(63 downto 0);
+        freeze_req         : in std_logic;
 
         variable v_prev_slice        : inout std_logic_vector(63 downto 0);
         variable v_fifo              : inout fifo_t;
@@ -125,14 +143,22 @@ architecture Behavioral of edge_extractor is
         variable v_overflow_pulse    : inout std_logic;
         variable v_freeze_drop_pulse : inout std_logic
     ) is
-        variable n_atom_count  : unsigned(ATOM_NB_SIZE-1 downto 0);
-        variable addr_extended : unsigned(63 downto 0);
+        variable n_atom_count   : unsigned(ATOM_NB_SIZE-1 downto 0);
+        variable addr_extended  : unsigned(63 downto 0);
+        variable effective_addr : std_logic_vector(63 downto 0);
     begin
         if freeze_req = '1' then
             if atom_valid = '1' then
                 v_freeze_drop_pulse := '1';
             end if;
         elsif atom_valid = '1' then
+            -- Use pre-exception address if an exception was pending
+            if exception_pending = '1' then
+                effective_addr := pre_exception_addr;
+            else
+                effective_addr := addr;
+            end if;
+
             if v_fifo_count < FIFO_DEPTH then
                 v_edge_count := v_edge_count + 1;
                 -- Add the number of N elements to the address
@@ -161,6 +187,17 @@ architecture Behavioral of edge_extractor is
     signal fifo_wr_ptr : integer range 0 to FIFO_DEPTH-1 := 0;
     signal fifo_rd_ptr : integer range 0 to FIFO_DEPTH-1 := 0;
     signal fifo_count  : integer range 0 to FIFO_DEPTH := 0;
+
+    -- latched exception info, when an atom fires up we check if we were in a
+    -- pending state before
+    signal latched_exception_pending0  : std_logic := '0';
+    signal latched_exception_pending1  : std_logic := '0';
+    signal latched_exception_pending2  : std_logic := '0';
+    signal latched_exception_pending3  : std_logic := '0';
+    signal latched_pre_exception_addr0 : std_logic_vector(63 downto 0) := (others => '0');
+    signal latched_pre_exception_addr1 : std_logic_vector(63 downto 0) := (others => '0');
+    signal latched_pre_exception_addr2 : std_logic_vector(63 downto 0) := (others => '0');
+    signal latched_pre_exception_addr3 : std_logic_vector(63 downto 0) := (others => '0');
 
     -- Latched freeze request to detect falling edge
     signal latched_freeze_req : std_logic := '0';
@@ -230,6 +267,16 @@ begin
                 fifo_rd_ptr <= 0;
                 fifo_count  <= 0;
 
+                latched_exception_pending0  <= '0';
+                latched_exception_pending1  <= '0';
+                latched_exception_pending2  <= '0';
+                latched_exception_pending3  <= '0';
+
+                latched_pre_exception_addr0 <= (others => '0');
+                latched_pre_exception_addr1 <= (others => '0');
+                latched_pre_exception_addr2 <= (others => '0');
+                latched_pre_exception_addr3 <= (others => '0');
+
                 -- Variables
                 v_prev_slice  := (others=>'0');
                 v_fifo_wr_ptr := 0;
@@ -255,22 +302,37 @@ begin
                 -- Latch freeze request
                 latched_freeze_req <= i_freeze_request;
 
+                -- Latch exception info
+                latched_exception_pending0 <= i_exception_pending0;
+                latched_exception_pending1 <= i_exception_pending1;
+                latched_exception_pending2 <= i_exception_pending2;
+                latched_exception_pending3 <= i_exception_pending3;
+
+                latched_pre_exception_addr0 <= i_pre_exception_addr0;
+                latched_pre_exception_addr1 <= i_pre_exception_addr1;
+                latched_pre_exception_addr2 <= i_pre_exception_addr2;
+                latched_pre_exception_addr3 <= i_pre_exception_addr3;
+
                 -- Reset prev_slice on falling edge of freeze_request
                 if latched_freeze_req = '1' and i_freeze_request = '0' then
                     v_prev_slice := (others => '0');
                 end if;
 
                 -- Sequentially process ports 0..3
-                process_atom(i_atom_valid0, i_address_reg_0_0, i_atom_elements0, i_atom_nb0, i_freeze_request,
+                process_atom(i_atom_valid0, i_address_reg_0_0, i_atom_elements0, i_atom_nb0,
+                             latched_exception_pending0, latched_pre_exception_addr0, i_freeze_request,
                              v_prev_slice, v_fifo, v_fifo_wr_ptr, v_fifo_count, v_index,
                              v_edge_count, v_overflow_pulse, v_freeze_drop_pulse);
-                process_atom(i_atom_valid1, i_address_reg_0_1, i_atom_elements1, i_atom_nb1, i_freeze_request,
+                process_atom(i_atom_valid1, i_address_reg_0_1, i_atom_elements1, i_atom_nb1,
+                             latched_exception_pending1, latched_pre_exception_addr1, i_freeze_request,
                              v_prev_slice, v_fifo, v_fifo_wr_ptr, v_fifo_count, v_index,
                              v_edge_count, v_overflow_pulse, v_freeze_drop_pulse);
-                process_atom(i_atom_valid2, i_address_reg_0_2, i_atom_elements2, i_atom_nb2, i_freeze_request,
+                process_atom(i_atom_valid2, i_address_reg_0_2, i_atom_elements2, i_atom_nb2,
+                             latched_exception_pending2, latched_pre_exception_addr2, i_freeze_request,
                              v_prev_slice, v_fifo, v_fifo_wr_ptr, v_fifo_count, v_index,
                              v_edge_count, v_overflow_pulse, v_freeze_drop_pulse);
-                process_atom(i_atom_valid3, i_address_reg_0_3, i_atom_elements3, i_atom_nb3, i_freeze_request,
+                process_atom(i_atom_valid3, i_address_reg_0_3, i_atom_elements3, i_atom_nb3,
+                             latched_exception_pending3, latched_pre_exception_addr3, i_freeze_request,
                              v_prev_slice, v_fifo, v_fifo_wr_ptr, v_fifo_count, v_index,
                              v_edge_count, v_overflow_pulse, v_freeze_drop_pulse);
 

@@ -2,6 +2,10 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
+library work;
+use work.decoder_constants.all;
+
+
 entity edge_extractor_tb is
 -- Port ( );
 end edge_extractor_tb;
@@ -31,25 +35,41 @@ architecture Simulation of edge_extractor_tb is
         aresetn  : in  std_logic;
 
         -- Inputs from ETM decoder (4 sequential ports)
-        i_atom_valid0     : in std_logic;
-        i_address_reg_0_0 : in std_logic_vector(63 downto 0);
-        i_atom_elements0  : in std_logic_vector(ATOM_ELTS_SIZE-1 downto 0);
-        i_atom_nb0        : in unsigned(ATOM_NB_SIZE-1 downto 0);
+        i_atom_valid0         : in std_logic;
+        i_address_reg_0_0     : in std_logic_vector(63 downto 0);
+        i_atom_elements0      : in std_logic_vector(ATOM_ELTS_SIZE-1 downto 0);
+        i_atom_nb0            : in unsigned(ATOM_NB_SIZE-1 downto 0);
+        i_exception_valid0    : in std_logic;
+        i_exception_type0     : in std_logic_vector(EXC_TYPE_SIZE-1 downto 0);
+        i_exception_pending0  : in std_logic;
+        i_pre_exception_addr0 : in std_logic_vector(63 downto 0);
 
-        i_atom_valid1     : in std_logic;
-        i_address_reg_0_1 : in std_logic_vector(63 downto 0);
-        i_atom_elements1  : in std_logic_vector(ATOM_ELTS_SIZE-1 downto 0);
-        i_atom_nb1        : in unsigned(ATOM_NB_SIZE-1 downto 0);
+        i_atom_valid1         : in std_logic;
+        i_address_reg_0_1     : in std_logic_vector(63 downto 0);
+        i_atom_elements1      : in std_logic_vector(ATOM_ELTS_SIZE-1 downto 0);
+        i_atom_nb1            : in unsigned(ATOM_NB_SIZE-1 downto 0);
+        i_exception_valid1    : in std_logic;
+        i_exception_type1     : in std_logic_vector(EXC_TYPE_SIZE-1 downto 0);
+        i_exception_pending1  : in std_logic;
+        i_pre_exception_addr1 : in std_logic_vector(63 downto 0);
 
-        i_atom_valid2     : in std_logic;
-        i_address_reg_0_2 : in std_logic_vector(63 downto 0);
-        i_atom_elements2  : in std_logic_vector(ATOM_ELTS_SIZE-1 downto 0);
-        i_atom_nb2        : in unsigned(ATOM_NB_SIZE-1 downto 0);
+        i_atom_valid2         : in std_logic;
+        i_address_reg_0_2     : in std_logic_vector(63 downto 0);
+        i_atom_elements2      : in std_logic_vector(ATOM_ELTS_SIZE-1 downto 0);
+        i_atom_nb2            : in unsigned(ATOM_NB_SIZE-1 downto 0);
+        i_exception_valid2    : in std_logic;
+        i_exception_type2     : in std_logic_vector(EXC_TYPE_SIZE-1 downto 0);
+        i_exception_pending2  : in std_logic;
+        i_pre_exception_addr2 : in std_logic_vector(63 downto 0);
 
-        i_atom_valid3     : in std_logic;
-        i_address_reg_0_3 : in std_logic_vector(63 downto 0);
-        i_atom_elements3  : in std_logic_vector(ATOM_ELTS_SIZE-1 downto 0);
-        i_atom_nb3        : in unsigned(ATOM_NB_SIZE-1 downto 0);
+        i_atom_valid3         : in std_logic;
+        i_address_reg_0_3     : in std_logic_vector(63 downto 0);
+        i_atom_elements3      : in std_logic_vector(ATOM_ELTS_SIZE-1 downto 0);
+        i_atom_nb3            : in unsigned(ATOM_NB_SIZE-1 downto 0);
+        i_exception_valid3    : in std_logic;
+        i_exception_type3     : in std_logic_vector(EXC_TYPE_SIZE-1 downto 0);
+        i_exception_pending3  : in std_logic;
+        i_pre_exception_addr3 : in std_logic_vector(63 downto 0);
 
         -- Freeze request
         i_freeze_request  : in std_logic;
@@ -174,21 +194,37 @@ architecture Simulation of edge_extractor_tb is
     signal address_reg_0_0 : std_logic_vector(63 downto 0);
     signal atom_elements0  : std_logic_vector(ATOM_ELTS_SIZE-1 downto 0);
     signal atom_nb0        : unsigned(ATOM_NB_SIZE-1 downto 0);
+    signal exc_valid0      : std_logic;
+    signal exc_type0       : std_logic_vector(4 downto 0);
+    signal exc_pending0    : std_logic;
+    signal pre_exc_addr0   : std_logic_vector(63 downto 0);
 
     signal atom_valid1     : std_logic;
     signal address_reg_0_1 : std_logic_vector(63 downto 0);
     signal atom_elements1  : std_logic_vector(ATOM_ELTS_SIZE-1 downto 0);
     signal atom_nb1        : unsigned(ATOM_NB_SIZE-1 downto 0);
+    signal exc_valid1      : std_logic;
+    signal exc_type1       : std_logic_vector(4 downto 0);
+    signal exc_pending1    : std_logic;
+    signal pre_exc_addr1   : std_logic_vector(63 downto 0);
 
     signal atom_valid2     : std_logic;
     signal address_reg_0_2 : std_logic_vector(63 downto 0);
     signal atom_elements2  : std_logic_vector(ATOM_ELTS_SIZE-1 downto 0);
     signal atom_nb2        : unsigned(ATOM_NB_SIZE-1 downto 0);
+    signal exc_valid2      : std_logic;
+    signal exc_type2       : std_logic_vector(4 downto 0);
+    signal exc_pending2    : std_logic;
+    signal pre_exc_addr2   : std_logic_vector(63 downto 0);
 
     signal atom_valid3     : std_logic;
     signal address_reg_0_3 : std_logic_vector(63 downto 0);
     signal atom_elements3  : std_logic_vector(ATOM_ELTS_SIZE-1 downto 0);
     signal atom_nb3        : unsigned(ATOM_NB_SIZE-1 downto 0);
+    signal exc_valid3      : std_logic;
+    signal exc_type3       : std_logic_vector(4 downto 0);
+    signal exc_pending3    : std_logic;
+    signal pre_exc_addr3   : std_logic_vector(63 downto 0);
 
     -- Freeze request
     signal freeze_request  : std_logic := '0';
@@ -231,25 +267,41 @@ begin
         aresetn  => reset,
 
         -- Inputs from ETM decoder (4 sequential ports)
-        i_atom_valid0     => atom_valid0,
-        i_address_reg_0_0 => address_reg_0_0,
-        i_atom_elements0  => atom_elements0,
-        i_atom_nb0        => atom_nb0,
+        i_atom_valid0         => atom_valid0,
+        i_address_reg_0_0     => address_reg_0_0,
+        i_atom_elements0      => atom_elements0,
+        i_atom_nb0            => atom_nb0,
+        i_exception_valid0    => exc_valid0,
+        i_exception_type0     => exc_type0,
+        i_exception_pending0  => exc_pending0,
+        i_pre_exception_addr0 => pre_exc_addr0,
 
-        i_atom_valid1     => atom_valid1,
-        i_address_reg_0_1 => address_reg_0_1,
-        i_atom_elements1  => atom_elements1,
-        i_atom_nb1        => atom_nb1,
+        i_atom_valid1         => atom_valid1,
+        i_address_reg_0_1     => address_reg_0_1,
+        i_atom_elements1      => atom_elements1,
+        i_atom_nb1            => atom_nb1,
+        i_exception_valid1    => exc_valid1,
+        i_exception_type1     => exc_type1,
+        i_exception_pending1  => exc_pending1,
+        i_pre_exception_addr1 => pre_exc_addr1,
 
-        i_atom_valid2     => atom_valid2,
-        i_address_reg_0_2 => address_reg_0_2,
-        i_atom_elements2  => atom_elements2,
-        i_atom_nb2        => atom_nb2,
+        i_atom_valid2         => atom_valid2,
+        i_address_reg_0_2     => address_reg_0_2,
+        i_atom_elements2      => atom_elements2,
+        i_atom_nb2            => atom_nb2,
+        i_exception_valid2    => exc_valid2,
+        i_exception_type2     => exc_type2,
+        i_exception_pending2  => exc_pending2,
+        i_pre_exception_addr2 => pre_exc_addr2,
 
-        i_atom_valid3     => atom_valid3,
-        i_address_reg_0_3 => address_reg_0_3,
-        i_atom_elements3  => atom_elements3,
-        i_atom_nb3        => atom_nb3,
+        i_atom_valid3         => atom_valid3,
+        i_address_reg_0_3     => address_reg_0_3,
+        i_atom_elements3      => atom_elements3,
+        i_atom_nb3            => atom_nb3,
+        i_exception_valid3    => exc_valid3,
+        i_exception_type3     => exc_type3,
+        i_exception_pending3  => exc_pending3,
+        i_pre_exception_addr3 => pre_exc_addr3,
 
         -- Freeze request
         i_freeze_request  => freeze_request,
