@@ -389,12 +389,12 @@ begin
         -- Simultaneous atoms on ports 1 and 2
         atom_valid1     <= '1';
         address_reg_0_1 <= x"0000000000000200";
-        atom_elements1  <= "000000000000000000000001";
+        atom_elements1  <= "000000000000000000000010"; -- NE
         atom_nb1        <= "00010";
 
         atom_valid2     <= '1';
         address_reg_0_2 <= x"0000000000000300";
-        atom_elements2  <= "000000000000000000000101";
+        atom_elements2  <= "000000000000000000000010"; -- NE
         atom_nb2        <= "00010";
 
         wait until rising_edge(clock);
@@ -423,7 +423,7 @@ begin
         for i in 0 to 3 loop
             atom_valid0     <= '1';
             address_reg_0_0 <= std_logic_vector(to_unsigned(i * 16#100#, 64));
-            atom_elements0  <= "000000000000000000000001";
+            atom_elements0  <= "000000000000000000000100"; -- NNE
             atom_nb0        <= "00011";
             wait until rising_edge(clock);
         end loop;
@@ -459,22 +459,22 @@ begin
         for i in 0 to FIFO_DEPTH loop  -- one extra to guarantee overflow
             atom_valid0     <= '1';
             address_reg_0_0 <= std_logic_vector(to_unsigned(i * 16#100#, 64));
-            atom_elements0  <= "000000000000000000000001";  -- NNE
+            atom_elements0  <= "000000000000000000000100";  -- NNE
             atom_nb0        <= "00011";
 
             atom_valid1     <= '1';
             address_reg_0_1 <= std_logic_vector(to_unsigned(i * 16#200#, 64));
-            atom_elements1  <= "000000000000000000000001";
+            atom_elements1  <= "000000000000000000000100";
             atom_nb1        <= "00011";
 
             atom_valid2     <= '1';
             address_reg_0_2 <= std_logic_vector(to_unsigned(i * 16#300#, 64));
-            atom_elements2  <= "000000000000000000000001";
+            atom_elements2  <= "000000000000000000000100";
             atom_nb2        <= "00011";
 
             atom_valid3     <= '1';
             address_reg_0_3 <= std_logic_vector(to_unsigned(i * 16#400#, 64));
-            atom_elements3  <= "000000000000000000000001";
+            atom_elements3  <= "000000000000000000000100";
             atom_nb3        <= "00011";
 
             wait until rising_edge(clock);
@@ -566,6 +566,51 @@ begin
         assert index = x"0000000000000ABC"
             report "prev_slice reset failed: index should match first-ever edge" severity error;
 
+
+        -----------------------------------------------------------------------
+        -- Test: N accumulation within the same cycle, different ports
+        -- Port 0: NNNNN, Port 1: E ? both valid in the same cycle
+        -- Should still produce exactly ONE edge
+
+        axi_lite_write(axi_awaddr, axi_awvalid, axi_wdata, axi_wvalid,
+                       axi_awready, axi_wready, axi_bvalid, clock,
+                       x"00", x"00000001");
+
+        -- Trigger freeze to reset prev_slice and pending_n_count
+        freeze_request <= '1';
+        wait until rising_edge(clock);
+        freeze_request <= '0';
+        wait until rising_edge(clock);
+
+        ready <= '1';
+
+        -- Same cycle: port 0 = NNNNN, port 1 = E
+        atom_valid0     <= '1';
+        address_reg_0_0 <= x"0000000000002000";
+        atom_elements0  <= "000000000000000000000000"; -- NNNNN
+        atom_nb0        <= "00101";
+
+        atom_valid1     <= '1';
+        address_reg_0_1 <= x"0000000000002000";
+        atom_elements1  <= "000000000000000000000001"; -- E
+        atom_nb1        <= "00001";
+
+        wait until rising_edge(clock);
+        atom_valid0 <= '0';
+        atom_valid1 <= '0';
+
+        wait for 1 ns;
+
+        report "Same-cycle N-accumulation index = " & to_hstring(to_bitvector(index));
+        assert index = x"0000000000002005"
+            report "Wrong index: expected 0x2005 (addr + 5 N-atoms)" severity error;
+
+        wait until rising_edge(clock);
+        axi_lite_read(axi_araddr, axi_arvalid, axi_rdata, axi_arready,
+                      axi_rvalid, clock, x"04", status);
+        report "edges_total same-cycle NNNNN+E = " & integer'image(to_integer(unsigned(status)));
+        assert unsigned(status) = 1
+            report "Expected exactly 1 edge from same-cycle NNNNN+E" severity error;
 
         wait;
     end process;

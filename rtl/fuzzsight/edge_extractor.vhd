@@ -135,6 +135,7 @@ architecture Behavioral of edge_extractor is
         freeze_req         : in std_logic;
 
         variable v_prev_slice        : inout std_logic_vector(63 downto 0);
+        variable v_pending_n_count   : inout unsigned(ATOM_NB_SIZE-1 downto 0);
         variable v_fifo              : inout fifo_t;
         variable v_fifo_wr_ptr       : inout integer;
         variable v_fifo_count        : inout integer;
@@ -159,21 +160,31 @@ architecture Behavioral of edge_extractor is
                 effective_addr := addr;
             end if;
 
-            if v_fifo_count < FIFO_DEPTH then
-                v_edge_count := v_edge_count + 1;
-                -- Add the number of N elements to the address
-                n_atom_count := count_n_atoms(atom_elts, atom_nb);
-                addr_extended := unsigned(addr) + n_atom_count;
-                -- Compute the index by XORing the address to the previous slice
-                v_index := std_logic_vector(addr_extended xor unsigned(v_prev_slice));
-                -- Update the previous slice with the new address >> 1
-                v_prev_slice := std_logic_vector(shift_right(addr_extended, 1));
-                -- Update FIFO
-                v_fifo(v_fifo_wr_ptr) := v_index;
-                v_fifo_wr_ptr := (v_fifo_wr_ptr + 1) mod FIFO_DEPTH;
-                v_fifo_count  := v_fifo_count + 1;
-            else -- FIFO full, edge dropped
-                v_overflow_pulse := '1';
+            n_atom_count := count_n_atoms(atom_elts, atom_nb);
+
+
+            if atom_elts(to_integer(atom_nb) - 1) = '1' then
+                -- Packet ends with E: emit edge
+                if v_fifo_count < FIFO_DEPTH then
+                    v_edge_count := v_edge_count + 1;
+                    -- Add the number of N elements to the address
+                    addr_extended := unsigned(effective_addr) + v_pending_n_count + n_atom_count;
+                    -- Compute the index by XORing the address to the previous slice
+                    v_index := std_logic_vector(addr_extended xor unsigned(v_prev_slice));
+                    -- Update the previous slice with the new address >> 1
+                    v_prev_slice := std_logic_vector(shift_right(addr_extended, 1));
+                    -- Update FIFO
+                    v_fifo(v_fifo_wr_ptr) := v_index;
+                    v_fifo_wr_ptr := (v_fifo_wr_ptr + 1) mod FIFO_DEPTH;
+                    v_fifo_count  := v_fifo_count + 1;
+                else -- FIFO full, edge dropped
+                    v_overflow_pulse := '1';
+                end if;
+                -- Clear pending N when comitting the edge
+                v_pending_n_count := (others => '0');
+            else
+                -- Packet ends with N, accumulate N count
+                v_pending_n_count := v_pending_n_count + n_atom_count;
             end if;
         end if;
     end procedure;
@@ -187,6 +198,9 @@ architecture Behavioral of edge_extractor is
     signal fifo_wr_ptr : integer range 0 to FIFO_DEPTH-1 := 0;
     signal fifo_rd_ptr : integer range 0 to FIFO_DEPTH-1 := 0;
     signal fifo_count  : integer range 0 to FIFO_DEPTH := 0;
+
+    -- Accumulating number of N atoms, stalled waiting for E to commit
+    signal pending_n_count : unsigned(ATOM_NB_SIZE-1 downto 0) := (others => '0');
 
     -- latched exception info, when an atom fires up we check if we were in a
     -- pending state before
@@ -255,6 +269,7 @@ begin
         variable v_fifo_rd_ptr       : integer range 0 to FIFO_DEPTH-1;
         variable v_fifo_count        : integer range 0 to FIFO_DEPTH;
         variable v_index             : std_logic_vector(63 downto 0);
+        variable v_pending_n_count   : unsigned(ATOM_NB_SIZE-1 downto 0);
         variable v_edge_count        : unsigned(2 downto 0);
         variable v_overflow_pulse    : std_logic;
         variable v_freeze_drop_pulse : std_logic;
@@ -289,11 +304,12 @@ begin
                 v_freeze_drop_pulse := '0';
             else
                 -- Variables assignments
-                v_fifo        := fifo;
-                v_fifo_wr_ptr := fifo_wr_ptr;
-                v_fifo_rd_ptr := fifo_rd_ptr;
-                v_fifo_count  := fifo_count;
-                v_prev_slice  := prev_slice;
+                v_fifo            := fifo;
+                v_fifo_wr_ptr     := fifo_wr_ptr;
+                v_fifo_rd_ptr     := fifo_rd_ptr;
+                v_fifo_count      := fifo_count;
+                v_prev_slice      := prev_slice;
+                v_pending_n_count := pending_n_count;
 
                 v_edge_count        := (others=>'0');
                 v_overflow_pulse    := '0';
@@ -315,25 +331,26 @@ begin
 
                 -- Reset prev_slice on falling edge of freeze_request
                 if latched_freeze_req = '1' and i_freeze_request = '0' then
-                    v_prev_slice := (others => '0');
+                    v_prev_slice      := (others => '0');
+                    v_pending_n_count := (others => '0');
                 end if;
 
                 -- Sequentially process ports 0..3
                 process_atom(i_atom_valid0, i_address_reg_0_0, i_atom_elements0, i_atom_nb0,
                              latched_exception_pending0, latched_pre_exception_addr0, i_freeze_request,
-                             v_prev_slice, v_fifo, v_fifo_wr_ptr, v_fifo_count, v_index,
+                             v_prev_slice, v_pending_n_count, v_fifo, v_fifo_wr_ptr, v_fifo_count, v_index,
                              v_edge_count, v_overflow_pulse, v_freeze_drop_pulse);
                 process_atom(i_atom_valid1, i_address_reg_0_1, i_atom_elements1, i_atom_nb1,
                              latched_exception_pending1, latched_pre_exception_addr1, i_freeze_request,
-                             v_prev_slice, v_fifo, v_fifo_wr_ptr, v_fifo_count, v_index,
+                             v_prev_slice, v_pending_n_count, v_fifo, v_fifo_wr_ptr, v_fifo_count, v_index,
                              v_edge_count, v_overflow_pulse, v_freeze_drop_pulse);
                 process_atom(i_atom_valid2, i_address_reg_0_2, i_atom_elements2, i_atom_nb2,
                              latched_exception_pending2, latched_pre_exception_addr2, i_freeze_request,
-                             v_prev_slice, v_fifo, v_fifo_wr_ptr, v_fifo_count, v_index,
+                             v_prev_slice, v_pending_n_count, v_fifo, v_fifo_wr_ptr, v_fifo_count, v_index,
                              v_edge_count, v_overflow_pulse, v_freeze_drop_pulse);
                 process_atom(i_atom_valid3, i_address_reg_0_3, i_atom_elements3, i_atom_nb3,
                              latched_exception_pending3, latched_pre_exception_addr3, i_freeze_request,
-                             v_prev_slice, v_fifo, v_fifo_wr_ptr, v_fifo_count, v_index,
+                             v_prev_slice, v_pending_n_count, v_fifo, v_fifo_wr_ptr, v_fifo_count, v_index,
                              v_edge_count, v_overflow_pulse, v_freeze_drop_pulse);
 
                 -- Advance read pointer when downstream consumes
@@ -343,11 +360,12 @@ begin
                 end if;
 
                 -- Commit variables to the signals
-                fifo        <= v_fifo;
-                fifo_wr_ptr <= v_fifo_wr_ptr;
-                fifo_rd_ptr <= v_fifo_rd_ptr;
-                fifo_count  <= v_fifo_count;
-                prev_slice  <= v_prev_slice;
+                fifo            <= v_fifo;
+                fifo_wr_ptr     <= v_fifo_wr_ptr;
+                fifo_rd_ptr     <= v_fifo_rd_ptr;
+                fifo_count      <= v_fifo_count;
+                prev_slice      <= v_prev_slice;
+                pending_n_count <= v_pending_n_count;
 
                 edge_count        <= v_edge_count;
                 overflow_pulse    <= v_overflow_pulse;
