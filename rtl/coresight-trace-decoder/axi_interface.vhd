@@ -24,6 +24,10 @@ entity axi_interface is
         -- Soft reset
         o_soft_reset : out std_logic;
 
+        -- Address range base and end
+        o_trace_range_base : out std_logic_vector(63 downto 0);
+        o_trace_range_end  : out std_logic_vector(63 downto 0);
+
         -- AXI4-Lite interface
         -- write address channel
         s_axi_awaddr  : in  std_logic_vector(ADDR_WIDTH-1 downto 0);
@@ -60,6 +64,12 @@ architecture Behavioral of axi_interface is
     signal soft_reset_in_progress : std_logic := '0';
     signal soft_reset_done_sticky : std_logic := '1';  -- starts 1, no reset pending
 
+    -- Trace range, even though the ETM filter addresses based on this range,
+    -- exception might come through so we make them configurable from AXI-Lite
+    signal trace_range_base_lo : std_logic_vector(31 downto 0) := (others => '0');
+    signal trace_range_base_hi : std_logic_vector(31 downto 0) := (others => '0');
+    signal trace_range_end_lo  : std_logic_vector(31 downto 0) := (others => '1');
+    signal trace_range_end_hi  : std_logic_vector(31 downto 0) := (others => '1');
 
     -- AXI-Lite signals
     signal awready : std_logic := '0';
@@ -91,6 +101,9 @@ begin
 
     -- Soft reset is active while any bit in the shift register is set
     o_soft_reset <= soft_reset_sr(0);
+
+    o_trace_range_base <= trace_range_base_hi & trace_range_base_lo;
+    o_trace_range_end  <= trace_range_end_hi  & trace_range_end_lo;
 
     counter_process: process(aclk)
     begin
@@ -144,6 +157,11 @@ begin
                 soft_reset_sr          <= (others => '0');
                 soft_reset_in_progress <= '0';
                 soft_reset_done_sticky <= '1';
+
+                trace_range_base_lo <= (others => '0');
+                trace_range_base_hi <= (others => '0');
+                trace_range_end_lo  <= (others => '1');
+                trace_range_end_hi  <= (others => '1');
             else
 
                 stats_reset <= '0'; -- Default
@@ -186,6 +204,12 @@ begin
                                 soft_reset_done_sticky <= '0';
                                 soft_reset_in_progress <= '1';
                             end if;
+                        -- Base address - low and high
+                        when x"14" => trace_range_base_lo <= wdata_reg;
+                        when x"18" => trace_range_base_hi <= wdata_reg;
+                        -- End address - low and high
+                        when x"1C" => trace_range_end_lo  <= wdata_reg;
+                        when x"20" => trace_range_end_hi  <= wdata_reg;
                         when others => null;
                     end case;
 
@@ -235,6 +259,15 @@ begin
                         --   bit 0 = soft_reset_done: '1' when reset complete
                         when x"10" =>
                             s_axi_rdata <= (31 downto 1 => '0') & soft_reset_done_sticky;
+
+                        -- 0x14: Lower 32-bits of the base address
+                        when x"14" => s_axi_rdata <= trace_range_base_lo;
+                        -- 0x18: Upper 32-bits of the base address
+                        when x"18" => s_axi_rdata <= trace_range_base_hi;
+                        -- 0x1C: Lower 32-bits of the end address
+                        when x"1C" => s_axi_rdata <= trace_range_end_lo;
+                        -- 0x20: Upper 32-bits of the end address
+                        when x"20" => s_axi_rdata <= trace_range_end_hi;
                         when others =>
                             s_axi_rdata <= (others => '0');
                     end case;

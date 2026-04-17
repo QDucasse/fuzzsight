@@ -42,6 +42,9 @@ architecture Behavioral of trace_replay_tb is
     signal compact_data    : std_logic_vector(31 downto 0);
     signal compact_valid   : std_logic;
 
+    signal trace_range_base : std_logic_vector(63 downto 0);
+    signal trace_range_end  : std_logic_vector(63 downto 0);
+
     -- etm_decoder outputs (ETM0)
     signal atom_valid0     : std_logic;
     signal exc_valid0      : std_logic;
@@ -180,6 +183,9 @@ begin
             i_soft_reset          => '0',
             i_data                => compact_data,
             i_valid               => compact_valid,
+
+            i_trace_range_base    => trace_range_base,
+            i_trace_range_end     => trace_range_end,
 
             o_atom_valid0         => atom_valid0,
             o_exception_valid0    => exc_valid0,

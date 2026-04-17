@@ -52,6 +52,10 @@ entity etm_decoder is
         i_data : in std_logic_vector(31 downto 0);
         i_valid: in std_logic;
 
+        -- Range filter (from AXI-Lite)
+        i_trace_range_base : in std_logic_vector(63 downto 0);
+        i_trace_range_end  : in std_logic_vector(63 downto 0);
+
         o_atom_valid0         : out std_logic;
         o_exception_valid0    : out std_logic;
         o_ts0                 : out std_logic_vector(63 downto 0);
@@ -1572,7 +1576,10 @@ architecture Behavioral of etm_decoder is
     --   in the previous step.
     --
     -- MW: maximal load on packet stream is 32 bits/cycle if all trace data is from one ETM.
-    pure function handleActionPlan(in_trace_state : TraceState; action : TraceStateAction; byte : std_logic_vector(7 downto 0)) return TraceState is
+    pure function handleActionPlan(
+        in_trace_state : TraceState; action : TraceStateAction; byte : std_logic_vector(7 downto 0);
+        trace_range_base : std_logic_vector(63 downto 0); trace_range_end : std_logic_vector(63 downto 0)
+    ) return TraceState is
     variable out_trace_state : TraceState;
     -- Atom related
     variable atom_f5_code : std_logic_vector(2 downto 0);
@@ -1847,8 +1854,12 @@ architecture Behavioral of etm_decoder is
                 out_trace_state.output_state.exception_valid    := '1';
                 out_trace_state.output_state.exception_pending  := '1';
 
-                -- Cascading exceptions should keep the initial value of the basic block
-                if in_trace_state.output_state.exception_pending = '0' then
+                -- Cascading exceptions should keep the initial value of the basic block.
+                -- Since, EVEN WITH address range filters, exception still get into the trace,
+                -- filter those out too.
+                if in_trace_state.output_state.exception_pending = '0' and
+                unsigned(in_trace_state.address_state.reg0) >= unsigned(trace_range_base) and
+                unsigned(in_trace_state.address_state.reg0) <  unsigned(trace_range_end) then
                     out_trace_state.output_state.pre_exception_addr := in_trace_state.address_state.reg0;
                 end if;
 
@@ -2053,25 +2064,25 @@ begin
             -- TODO: Deassert by default?
             data_valid_output_stage <= '0';
             if data_valid_action_stage = '1' then
-                trace_state0 <= handleActionPlan(trace_state3, action0, data_action_stage(7 downto 0));
+                trace_state0 <= handleActionPlan(trace_state3, action0, data_action_stage(7 downto 0), i_trace_range_base, i_trace_range_end);
 
                 trace_state1 <= handleActionPlan(
-                                handleActionPlan(trace_state3, action0, data_action_stage(7 downto 0)),
-                                                action1, data_action_stage(15 downto 8));
+                                handleActionPlan(trace_state3, action0, data_action_stage(7 downto 0), i_trace_range_base, i_trace_range_end),
+                                                action1, data_action_stage(15 downto 8), i_trace_range_base, i_trace_range_end);
 
                 trace_state2 <= handleActionPlan(
                                 handleActionPlan(
-                                handleActionPlan(trace_state3, action0, data_action_stage(7 downto 0)),
-                                                 action1, data_action_stage(15 downto 8)),
-                                                 action2, data_action_stage(23 downto 16));
+                                handleActionPlan(trace_state3, action0, data_action_stage(7 downto 0), i_trace_range_base, i_trace_range_end),
+                                                 action1, data_action_stage(15 downto 8), i_trace_range_base, i_trace_range_end),
+                                                 action2, data_action_stage(23 downto 16), i_trace_range_base, i_trace_range_end);
 
                 trace_state3 <= handleActionPlan(
                                 handleActionPlan(
                                 handleActionPlan(
-                                handleActionPlan(trace_state3, action0, data_action_stage(7 downto 0)),
-                                                 action1, data_action_stage(15 downto 8)),
-                                                 action2, data_action_stage(23 downto 16)),
-                                                 action3, data_action_stage(31 downto 24));
+                                handleActionPlan(trace_state3, action0, data_action_stage(7 downto 0), i_trace_range_base, i_trace_range_end),
+                                                 action1, data_action_stage(15 downto 8), i_trace_range_base, i_trace_range_end),
+                                                 action2, data_action_stage(23 downto 16), i_trace_range_base, i_trace_range_end),
+                                                 action3, data_action_stage(31 downto 24), i_trace_range_base, i_trace_range_end);
 
                 data_valid_output_stage <= '1';
             end if;
