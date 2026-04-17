@@ -319,7 +319,7 @@ begin
                         --                          (sticky, cleared on read)
                         --   bit 1 = dma_busy:      DMA in progress
                         when x"04" =>
-                            s_axi_rdata <= (31 downto 4 => '0')
+                            s_axi_rdata <= (31 downto 2 => '0')
                                          & dma_busy
                                          & dma_done;
 
