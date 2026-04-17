@@ -1742,24 +1742,30 @@ architecture Behavioral of etm_decoder is
                 out_trace_state.context_state.context_id        := get_update_contextid_31_24(in_trace_state.context_state.context_id, byte);
 
             when scan_1_atom_element =>
-                -- clear pre-exception address
-                out_trace_state.output_state.exception_pending := '0';
+                -- clear pre-exception address if the atom is E, otherwise keep interrupt pending
+                if byte(0) = '1' then
+                    out_trace_state.output_state.exception_pending := '0';
+                end if;
 
                 out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 1 => '0') & byte(0);
                 out_trace_state.output_state.atom_nb       := 1;
                 out_trace_state.output_state.atom_valid    := '1';
 
             when scan_2_atom_elements =>
-                -- clear pre-exception address
-                out_trace_state.output_state.exception_pending := '0';
+                -- clear pre-exception address if the atom is E, otherwise keep interrupt pending
+                if byte(1) = '1' then
+                    out_trace_state.output_state.exception_pending := '0';
+                end if;
 
                 out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 2 => '0') & byte(1 downto 0);
                 out_trace_state.output_state.atom_nb       := 2;
                 out_trace_state.output_state.atom_valid    := '1';
 
             when scan_3_atom_elements =>
-                -- clear pre-exception address
-                out_trace_state.output_state.exception_pending := '0';
+                -- clear pre-exception address if the atom is E, otherwise keep interrupt pending
+                if byte(2) = '1' then
+                    out_trace_state.output_state.exception_pending := '0';
+                end if;
 
                 out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 3 => '0') & byte(2 downto 0);
                 out_trace_state.output_state.atom_nb       := 3;
@@ -1767,27 +1773,40 @@ architecture Behavioral of etm_decoder is
 
             when scan_4_atom_elements =>
                 -- clear pre-exception address
-                out_trace_state.output_state.exception_pending := '0';
+                if byte(2) = '1' then
+                    out_trace_state.output_state.exception_pending := '0';
+                end if;
+
 
                 -- WARNING: oldest is lsb
                 case byte(1 downto 0) is
-                    -- 1-N  2-E 3-E 4-E
+                    -- 1-N 2-E 3-E 4-E
                     when "00" =>
+                        -- Contains an E atom, clear the exception
+                        out_trace_state.output_state.exception_pending := '0';
+
                         out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 4 => '0') & "1110";
                         out_trace_state.output_state.atom_nb       := 4;
                         out_trace_state.output_state.atom_valid    := '1';
                     -- 1-N 2-N 3-N 4-N
                     when "01" =>
+                        -- No E element, exception pending kept
                         out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 4 => '0') & "0000";
                         out_trace_state.output_state.atom_nb       := 4;
                         out_trace_state.output_state.atom_valid    := '1';
                     -- 1-E 2-N 3-E 4-N
                     when "10" =>
+                        -- Contains an E atom, clear the exception
+                        out_trace_state.output_state.exception_pending := '0';
+
                         out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 4 => '0') & "0101";
                         out_trace_state.output_state.atom_nb       := 4;
                         out_trace_state.output_state.atom_valid    := '1';
                     -- 1-N 2-E 3-N 4-E
                     when "11" =>
+                        -- Contains an E atom, clear the exception
+                        out_trace_state.output_state.exception_pending := '0';
+
                         out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 4 => '0') & "1010";
                         out_trace_state.output_state.atom_nb       := 4;
                         out_trace_state.output_state.atom_valid    := '1';
@@ -1807,18 +1826,29 @@ architecture Behavioral of etm_decoder is
                 case atom_f5_code is
                     -- 1-N 2-E 3-E 4-E 5-E
                     when "101" =>
+                        -- Contains an E atom, clear the exception
+                        out_trace_state.output_state.exception_pending := '0';
+
                         out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 5 => '0') & "11110";
                         out_trace_state.output_state.atom_nb       := 5;
                         out_trace_state.output_state.atom_valid    := '1';
+                    -- 1-N 2-N 3-N 4-N 5-N
                     when "001" =>
+                        -- No E element, keep the pending going
                         out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 5 => '0') & "00000";
                         out_trace_state.output_state.atom_nb       := 5;
                         out_trace_state.output_state.atom_valid    := '1';
                     when "010" =>
+                        -- Contains an E atom, clear the exception
+                        out_trace_state.output_state.exception_pending := '0';
+
                         out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 5 => '0') & "01010";
                         out_trace_state.output_state.atom_nb       := 5;
                         out_trace_state.output_state.atom_valid    := '1';
                     when "011" =>
+                        -- Contains an E atom, clear the exception
+                        out_trace_state.output_state.exception_pending := '0';
+
                         out_trace_state.output_state.atom_elements := (ATOM_ELTS_SIZE - 1 downto 5 => '0') & "10101";
                         out_trace_state.output_state.atom_nb       := 5;
                         out_trace_state.output_state.atom_valid    := '1';
@@ -1829,7 +1859,7 @@ architecture Behavioral of etm_decoder is
                 end case;
 
             when scan_6_atom_elements =>
-                -- clear pre-exception address
+                -- Clear pre-exception address, an E atom is always here
                 out_trace_state.output_state.exception_pending := '0';
 
                 atom_size := to_integer(unsigned(byte(4 downto 0))) + 3 + 1;
